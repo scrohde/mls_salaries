@@ -48,6 +48,27 @@ func (c *Clubs) hasVal(s string) bool {
 	return false
 }
 
+// ClubTotals maps club names to total compensation
+type ClubTotals map[string]float64
+
+// KeyValue holds a key/value pair
+type KeyValue struct {
+	Key   string
+	Value float64
+}
+
+// Sort returns a sorted slice of ClubTotals key/value pairs
+func (ct *ClubTotals) Sort() []KeyValue {
+	p := make([]KeyValue, len(*ct))
+	i := 0
+	for k, v := range *ct {
+		p[i] = KeyValue{k, v}
+		i++
+	}
+	sort.Slice(p, func(i, j int) bool { return p[i].Value > p[j].Value })
+	return p
+}
+
 var allClubs = Clubs{
 	"NE",
 	"ORL",
@@ -72,23 +93,6 @@ var allClubs = Clubs{
 	"PHI",
 	"POR",
 	"RSL",
-}
-
-type keyValue struct {
-	Key   string
-	Value float64
-}
-
-// sortMapByValue turns a map into a slice, then sorts and returns it.
-func sortMapByValue(m map[string]float64) []keyValue {
-	p := make([]keyValue, len(m))
-	i := 0
-	for k, v := range m {
-		p[i] = keyValue{k, v}
-		i++
-	}
-	sort.Slice(p, func(i, j int) bool { return p[i].Value > p[j].Value })
-	return p
 }
 
 // commaf returns v as a string with commas added
@@ -139,16 +143,16 @@ func main() {
 	}
 
 	scanner := bufio.NewScanner(f)
-
-	clubTotals := make(map[string]float64, 30)
+	clubTotals := make(ClubTotals, 30)
 	for scanner.Scan() {
-		input := scanner.Text()
-		tokens := strings.Split(input, " ")
+		tokens := strings.Split(scanner.Text(), " ")
 		if !clubs.hasVal(tokens[0]) {
 			continue
 		}
 
 		for i, val := range tokens[1:] {
+			// we don't know how many names a player has, so search for the first '$'
+			// that tells us all we need to know
 			if val != "$" {
 				continue
 			}
@@ -178,8 +182,7 @@ func main() {
 	}
 
 	fmt.Print("\n\n")
-	p := sortMapByValue(clubTotals)
-	for _, v := range p {
+	for _, v := range clubTotals.Sort() {
 		fmt.Printf("%-5s total: %s\n", v.Key, commaf(v.Value))
 	}
 }
