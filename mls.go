@@ -19,8 +19,10 @@ type mlsData struct {
 	Compensation float64
 }
 
+// Clubs is a list of MLS clubs
 type Clubs []string
 
+// Set sets the value of c
 func (c *Clubs) Set(s string) error {
 	*c = strings.Split(s, ",")
 	for i, club := range *c {
@@ -32,6 +34,7 @@ func (c *Clubs) Set(s string) error {
 	return nil
 }
 
+// String returns c as string
 func (c *Clubs) String() string {
 	return strings.Join(*c, ", ")
 }
@@ -71,25 +74,25 @@ var allClubs = Clubs{
 	"RSL",
 }
 
-// A data structure to hold a key/value pairs.
-type KeyValue struct {
+type keyValue struct {
 	Key   string
 	Value float64
 }
 
-// sortMapByValue turns a map into a PairList, then sorts and returns it.
-func sortMapByValue(m map[string]float64) []KeyValue {
-	p := make([]KeyValue, len(m))
+// sortMapByValue turns a map into a slice, then sorts and returns it.
+func sortMapByValue(m map[string]float64) []keyValue {
+	p := make([]keyValue, len(m))
 	i := 0
 	for k, v := range m {
-		p[i] = KeyValue{k, v}
+		p[i] = keyValue{k, v}
 		i++
 	}
 	sort.Slice(p, func(i, j int) bool { return p[i].Value > p[j].Value })
 	return p
 }
 
-func Commaf(v float64) string {
+// commaf returns v as a string with commas added
+func commaf(v float64) string {
 	buf := &bytes.Buffer{}
 	if v < 0 {
 		buf.Write([]byte{'-'})
@@ -171,12 +174,12 @@ func main() {
 	}
 
 	for _, data := range all {
-		fmt.Printf("%-5s %-25s: %s\n", data.Club, data.Name, Commaf(data.Compensation))
+		fmt.Printf("%-5s %-25s: %s\n", data.Club, data.Name, commaf(data.Compensation))
 	}
 
 	fmt.Print("\n\n")
 	p := sortMapByValue(clubTotals)
 	for _, v := range p {
-		fmt.Printf("%-5s total: %s\n", v.Key, Commaf(v.Value))
+		fmt.Printf("%-5s total: %s\n", v.Key, commaf(v.Value))
 	}
 }
