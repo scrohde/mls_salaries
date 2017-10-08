@@ -130,7 +130,7 @@ func main() {
 	var clubs Clubs
 
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
-	var club = flag.Bool("club", true, "sort by club")
+	var club = flag.Bool("sort", true, "sort by club")
 	flag.Parse()
 
 	if len(clubs) == 0 {
@@ -177,12 +177,20 @@ func main() {
 		sort.SliceStable(all, func(i, j int) bool { return all[i].Club < all[j].Club })
 	}
 
+	i := 1
+	lastClub := all[0].Club
 	for _, data := range all {
-		fmt.Printf("%-5s %-25s: %s\n", data.Club, data.Name, commaf(data.Compensation))
+		if *club && data.Club != lastClub {
+			i = 1
+			lastClub = data.Club
+			fmt.Println()
+		}
+		fmt.Printf("%-3d %-5s %-25s: %s\n", i, data.Club, data.Name, commaf(data.Compensation))
+		i++
 	}
 
 	fmt.Print("\n\n")
-	for _, v := range clubTotals.Sort() {
-		fmt.Printf("%-5s total: %s\n", v.Key, commaf(v.Value))
+	for i, v := range clubTotals.Sort() {
+		fmt.Printf("%-2d %-5s total: %s\n", i+1, v.Key, commaf(v.Value))
 	}
 }
