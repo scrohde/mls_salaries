@@ -137,7 +137,7 @@ func main() {
 		clubs = allClubs
 	}
 
-	f, err := os.Open("2017_04_15_data")
+	f, err := os.Open("2017_09_15_data")
 	if err != nil {
 		panic(err)
 	}
