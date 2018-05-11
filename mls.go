@@ -30,10 +30,16 @@ type Club struct {
 // Set sets the value of c
 func (c *Clubs) Set(s string) error {
 	names := strings.Split(s, ",")
-	for i, name := range names {
-		(*c)[i] = Club{Name: strings.TrimSpace(strings.ToUpper(name))}
-		if !allClubs.hasVal((*c)[i].Name) {
-			return fmt.Errorf("invalid club: %s\nvalid clubs: %s", name, allClubs.String())
+	for _, name := range names {
+		name = strings.TrimSpace(strings.ToUpper(name))
+		if !allClubs.hasVal(name) {
+			return fmt.Errorf("\ninvalid club: %s\nvalid clubs: %s", name, allClubs.String())
+		}
+		for _, club := range allClubs {
+			if club.Name == name || club.FullName == name {
+				*c = append(*c, Club{club.Name, club.FullName})
+				break
+			}
 		}
 	}
 	return nil
@@ -139,14 +145,15 @@ func main() {
 	var clubs Clubs
 
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
-	var club = flag.Bool("sort", true, "sort by club")
+	club := flag.Bool("sort", true, "sort by club")
+	data := flag.String("data", "2018_05_01_data", "data file")
 	flag.Parse()
 
 	if len(clubs) == 0 {
 		clubs = allClubs
 	}
 
-	f, err := os.Open("2018_05_01_data")
+	f, err := os.Open(*data)
 	if err != nil {
 		panic(err)
 	}
