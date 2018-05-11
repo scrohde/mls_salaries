@@ -22,32 +22,32 @@ type mlsData struct {
 // Clubs is a list of MLS clubs
 type Clubs []Club
 
+// Club is the abreviated and full name of an MLS club
 type Club struct {
 	Name     string
 	FullName string
 }
 
-// Set sets the value of c
+// Set sets the value of clubs
 func (c *Clubs) Set(s string) error {
 	names := strings.Split(s, ",")
+loop:
 	for _, name := range names {
 		name = strings.TrimSpace(strings.ToUpper(name))
-		if !allClubs.hasVal(name) {
-			return fmt.Errorf("\ninvalid club: %s\nvalid clubs: %s", name, allClubs.String())
-		}
 		for _, club := range allClubs {
 			if club.Name == name || club.FullName == name {
 				*c = append(*c, Club{club.Name, club.FullName})
-				break
+				continue loop
 			}
 		}
+		return fmt.Errorf("\ninvalid club: %s\nvalid clubs: %s", name, allClubs.String())
 	}
 	return nil
 }
 
-// String returns c as string
+// String returns club names as a comma seperated list of abreviated names
 func (c *Clubs) String() string {
-	var names []string
+	names := make([]string, len(*c), len(*c))
 	for _, club := range *c {
 		names = append(names, club.Name)
 	}
@@ -158,29 +158,38 @@ func main() {
 		panic(err)
 	}
 
+	const (
+		FIRSTNAME = iota
+		LASTNAME
+		CLUB
+		POSITION
+		BASESALARY
+		COMPENSATION
+	)
+
 	scanner := bufio.NewScanner(f)
 	clubTotals := make(ClubTotals, 30)
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), "\t")
-		if len(tokens) < 3 {
+		if len(tokens) < COMPENSATION+1 {
 			continue
 		}
-		if !clubs.hasVal(tokens[0]) && !clubs.hasVal(tokens[2]) {
+		if !clubs.hasVal(tokens[CLUB]) {
 			continue
 		}
 
 		data := mlsData{}
 		for _, fullclub := range allClubs {
-			if fullclub.Name == tokens[2] || fullclub.FullName == tokens[2] {
+			if fullclub.Name == tokens[CLUB] || fullclub.FullName == tokens[CLUB] {
 				data.Club.Name = fullclub.Name
 				data.Club.FullName = fullclub.FullName
 				break
 			}
 		}
-		data.Pos = tokens[3]
-		data.Name = strings.Join(tokens[:2], " ")
-		data.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[4][1:], ",", "", -1), 32)
-		data.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[5][1:], ",", "", -1), 32)
+		data.Pos = tokens[POSITION]
+		data.Name = fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
+		data.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
+		data.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
 		all = append(all, data)
 
 		clubTotals[data.Club.Name] += data.Compensation
