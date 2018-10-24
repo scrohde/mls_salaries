@@ -84,6 +84,78 @@ func (ct *ClubTotals) Sort() []KeyValue {
 	return p
 }
 
+type DPs []string
+
+var allDPs = DPs{
+	"Fanendo Adi",
+	"Romain Alessandrini",
+	"Miguel Almiron",
+	"Jozy Altidore",
+	"Paul Arriola",
+	"Ezequiel Barco",
+	"Alejandro Bedoya",
+	"Sebastian Blanco",
+	"Michael Bradley",
+	"Josue Colman",
+	"Cristian Colman",
+	"Yohan Croizet",
+	"Clint Dempsey",
+	"Claude Dielna",
+	"Borek Dockal",
+	"Giovani dos Santos",
+	"Jonathan dos Santos",
+	"Dom Dwyer",
+	"Alberth Elis",
+	"Shkelzen Gashi",
+	"Sebastian Giovinco",
+	"Carlos Gruezo",
+	"Felipe Gutierrez",
+	"Federico Higuain",
+	"Andre Horta",
+	"Tim Howard",
+	"Sacha Kljestan",
+	"Nicolas Lodeiro",
+	"Josef Martinez",
+	"Tomas Martinez",
+	"Jesus Medina",
+	"Lucas Melano",
+	"Maxi Moralez",
+	"Santiago Mosquera",
+	"Nemanja Nikolic",
+	"Ignacio Piatti",
+	"Valeri \"Vako\" Qazaishvili",
+	"Darwin Quintero",
+	"Angelo Rodriguez",
+	"Wayne Rooney",
+	"Alejandro 'Kaku' Romero",
+	"Diego Rossi",
+	"Raul Ruidiaz",
+	"Johnny Russell",
+	"Albert Rusnak",
+	"Pedro Santos",
+	"Jefferson Savarino",
+	"Bastian Schweinsteiger",
+	"Brek Shea",
+	"Saphir Taider",
+	"Erick Torres",
+	"Milton Valenzuela",
+	"Diego Valeri",
+	"Carlos Vela",
+	"David Villa",
+	"Kendall Waston",
+	"Chris Wondolowski",
+	"Bradley Wright-Phillips",
+}
+
+func (d DPs) hasVal(name string) bool {
+	for _, val := range d {
+		if val == name {
+			return true
+		}
+	}
+	return false
+}
+
 var allClubs = Clubs{
 	{"NE", "New England Revolution"},
 	{"ORL", "Orlando City SC"},
@@ -146,6 +218,7 @@ func main() {
 
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
 	club := flag.Bool("sort", true, "sort by club")
+	dps := flag.Bool("dp", false, "only show DP players")
 	data := flag.String("data", "2018_05_01_data", "data file")
 	flag.Parse()
 
@@ -190,8 +263,12 @@ func main() {
 		data.Name = fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
 		data.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
 		data.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
-		all = append(all, data)
 
+		if *dps && !allDPs.hasVal(data.Name) {
+			continue
+		}
+
+		all = append(all, data)
 		clubTotals[data.Club.Name] += data.Compensation
 	}
 
