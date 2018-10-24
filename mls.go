@@ -219,7 +219,7 @@ func main() {
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
 	club := flag.Bool("sort", true, "sort by club")
 	dps := flag.Bool("dp", false, "only show DP players")
-	data := flag.String("data", "2018_05_01_data", "data file")
+	data := flag.String("data", "2018_09_15_data", "data file")
 	flag.Parse()
 
 	if len(clubs) == 0 {
