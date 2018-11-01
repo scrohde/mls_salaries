@@ -11,12 +11,42 @@ import (
 	"strings"
 )
 
-type mlsData struct {
+// Player is an MLS player
+type Player struct {
 	Club         Club
 	Name         string
 	Pos          string
 	BaseSalary   float64
 	Compensation float64
+}
+
+// Players is a list of MLS Players
+type Players []Player
+
+// Set sets the value of Players from a comma separated list
+func (p *Players) Set(s string) error {
+	names := strings.Split(s, ",")
+	for _, name := range names {
+		*p = append(*p, Player{Name: strings.ToLower(strings.TrimSpace(name))})
+	}
+	return nil
+}
+
+func (p *Players) String() string {
+	names := make([]string, len(*p), len(*p))
+	for _, player := range *p {
+		names = append(names, player.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+func (p *Players) HasVal(s string) bool {
+	for _, player := range *p {
+		if strings.Contains(strings.ToLower(s), player.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // Clubs is a list of MLS clubs
@@ -213,10 +243,14 @@ func commaf(v float64) string {
 }
 
 func main() {
-	var all []mlsData
-	var clubs Clubs
+	var (
+		all     Players
+		clubs   Clubs
+		players Players
+	)
 
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
+	flag.Var(&players, "players", "comma separated list of mls players")
 	club := flag.Bool("sort", true, "sort by club")
 	dps := flag.Bool("dp", false, "only show DP players")
 	data := flag.String("data", "2018_09_15_data", "data file")
@@ -251,25 +285,29 @@ func main() {
 			continue
 		}
 
-		data := mlsData{}
+		player := Player{}
 		for _, fullclub := range allClubs {
 			if fullclub.Name == tokens[CLUB] || fullclub.FullName == tokens[CLUB] {
-				data.Club.Name = fullclub.Name
-				data.Club.FullName = fullclub.FullName
+				player.Club.Name = fullclub.Name
+				player.Club.FullName = fullclub.FullName
 				break
 			}
 		}
-		data.Pos = tokens[POSITION]
-		data.Name = fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
-		data.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
-		data.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
+		player.Pos = tokens[POSITION]
+		player.Name = fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
+		player.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
+		player.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
 
-		if *dps && !allDPs.hasVal(data.Name) {
+		if players != nil && !players.HasVal(player.Name) {
 			continue
 		}
 
-		all = append(all, data)
-		clubTotals[data.Club.Name] += data.Compensation
+		if *dps && !allDPs.hasVal(player.Name) {
+			continue
+		}
+
+		all = append(all, player)
+		clubTotals[player.Club.Name] += player.Compensation
 	}
 
 	sort.Slice(all, func(i, j int) bool { return all[i].Compensation > all[j].Compensation })
