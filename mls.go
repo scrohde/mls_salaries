@@ -177,7 +177,7 @@ var allDPs = DPs{
 	"Bradley Wright-Phillips",
 }
 
-func (d DPs) hasVal(name string) bool {
+func (d DPs) HasVal(name string) bool {
 	for _, val := range d {
 		if val == name {
 			return true
@@ -211,6 +211,33 @@ var allClubs = Clubs{
 	{"POR", "Portland Timbers"},
 	{"RSL", "Real Salt Lake"},
 }
+
+type Pos []string
+
+var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M"}
+
+func (p *Pos) HasVal(s string) bool {
+	s = strings.ToUpper(s)
+	for _, pos := range *p {
+		if pos == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Pos) Set(s string) error {
+	for _, pos := range strings.Split(s, ",") {
+		pos = strings.ToUpper(strings.TrimSpace(pos))
+		if !allPos.HasVal(pos) {
+			return fmt.Errorf("valid values: %s", allPos.String())
+		}
+		*p = append(*p, pos)
+	}
+	return nil
+}
+
+func (p *Pos) String() string { return strings.Join(*p, ", ") }
 
 // commaf returns v as a string with commas added
 func commaf(v float64) string {
@@ -247,10 +274,12 @@ func main() {
 		all     Players
 		clubs   Clubs
 		players Players
+		pos     Pos
 	)
 
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
 	flag.Var(&players, "players", "comma separated list of mls players")
+	flag.Var(&pos, "pos", "comma separated list of player positions")
 	club := flag.Bool("sort", true, "sort by club")
 	dps := flag.Bool("dp", false, "only show DP players")
 	data := flag.String("data", "2018_09_15_data", "data file")
@@ -298,11 +327,15 @@ func main() {
 		player.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
 		player.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
 
+		if pos != nil && !pos.HasVal(player.Pos) {
+			continue
+		}
+
 		if players != nil && !players.HasVal(player.Name) {
 			continue
 		}
 
-		if *dps && !allDPs.hasVal(player.Name) {
+		if *dps && !allDPs.HasVal(player.Name) {
 			continue
 		}
 
@@ -323,7 +356,7 @@ func main() {
 			lastClub = data.Club
 			fmt.Println()
 		}
-		fmt.Printf("%-3d %-5s %-25s: %s\n", i, data.Club.Name, data.Name, commaf(data.Compensation))
+		fmt.Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club.Name, data.Pos, data.Name, commaf(data.Compensation))
 		i++
 	}
 
