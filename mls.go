@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -13,7 +14,7 @@ import (
 
 // Player is an MLS player
 type Player struct {
-	Club         Club
+	Club         string
 	Name         string
 	Pos          string
 	BaseSalary   float64
@@ -49,48 +50,66 @@ func (p *Players) HasVal(s string) bool {
 	return false
 }
 
-// Clubs is a list of MLS clubs
-type Clubs []Club
+// Clubs is a map of MLS club names to abbreviated names
+type Clubs map[string]string
 
-// Club is the abreviated and full name of an MLS club
-type Club struct {
-	Name     string
-	FullName string
+var allClubs = Clubs{
+	"New England Revolution": "NE",
+	"Orlando City SC":        "ORL",
+	"San Jose Earthquakes":   "SJ",
+	"Vancouver Whitecaps":    "VAN",
+	"Columbus Crew":          "CLB",
+	"DC United":              "DC",
+	"Minnesota United":       "MNUFC",
+	"Seattle Sounders FC":    "SEA",
+	"Chicago Fire":           "CHI",
+	"Colorado Rapids":        "COL",
+	"FC Dallas":              "DAL",
+	"Sporting Kansas City":   "KC",
+	"LA Galaxy":              "LA",
+	"LAFC":                   "LAFC",
+	"Montreal Impact":        "MTL",
+	"New York Red Bulls":     "NYRB",
+	"Toronto FC":             "TOR",
+	"Atlanta United":         "ATL",
+	"Houston Dynamo":         "HOU",
+	"New York City FC":       "NYCFC",
+	"Philadelphia Union":     "PHI",
+	"Portland Timbers":       "POR",
+	"Real Salt Lake":         "RSL",
+	"FC Cincinnati":          "CIN",
 }
 
 // Set sets the value of clubs
 func (c *Clubs) Set(s string) error {
-	names := strings.Split(s, ",")
-loop:
-	for _, name := range names {
+	*c = make(Clubs)
+	for _, name := range strings.Split(s, ",") {
 		name = strings.TrimSpace(strings.ToUpper(name))
-		for _, club := range allClubs {
-			if club.Name == name || club.FullName == name {
-				*c = append(*c, Club{club.Name, club.FullName})
-				continue loop
-			}
+		if key, ok := allClubs.getKey(name); ok {
+			(*c)[key] = name
+		} else {
+			return fmt.Errorf("valid clubs: %s", allClubs.String())
 		}
-		return fmt.Errorf("\ninvalid club: %s\nvalid clubs: %s", name, allClubs.String())
 	}
 	return nil
 }
 
-// String returns club names as a comma seperated list of abreviated names
-func (c *Clubs) String() string {
-	names := make([]string, len(*c), len(*c))
-	for _, club := range *c {
-		names = append(names, club.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
-func (c *Clubs) hasVal(s string) bool {
-	for _, val := range *c {
-		if val.Name == s || val.FullName == s {
-			return true
+func (c *Clubs) getKey(v string) (string, bool) {
+	for key, value := range *c {
+		if v == value {
+			return key, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// String returns club names as a comma separated list of abbreviated names
+func (c *Clubs) String() string {
+	var names []string
+	for _, val := range *c {
+		names = append(names, val)
+	}
+	return strings.Join(names, ", ")
 }
 
 // ClubTotals maps club names to total compensation
@@ -186,32 +205,6 @@ func (d DPs) HasVal(name string) bool {
 	return false
 }
 
-var allClubs = Clubs{
-	{"NE", "New England Revolution"},
-	{"ORL", "Orlando City SC"},
-	{"SJ", "San Jose Earthquakes"},
-	{"VAN", "Vancouver Whitecaps"},
-	{"CLB", "Columbus Crew"},
-	{"DC", "DC United"},
-	{"MNUFC", "Minnesota United"},
-	{"SEA", "Seattle Sounders FC"},
-	{"CHI", "Chicago Fire"},
-	{"COL", "Colorado Rapids"},
-	{"DAL", "FC Dallas"},
-	{"KC", "Sporting Kansas City"},
-	{"LA", "LA Galaxy"},
-	{"LAFC", "LAFC"},
-	{"MTL", "Montreal Impact"},
-	{"NYRB", "New York Red Bulls"},
-	{"TOR", "Toronto FC"},
-	{"ATL", "Atlanta United"},
-	{"HOU", "Houston Dynamo"},
-	{"NYCFC", "New York City FC"},
-	{"PHI", "Philadelphia Union"},
-	{"POR", "Portland Timbers"},
-	{"RSL", "Real Salt Lake"},
-}
-
 type Pos []string
 
 var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M"}
@@ -276,7 +269,7 @@ func main() {
 		players Players
 		pos     Pos
 	)
-
+	log.SetFlags(0)
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
 	flag.Var(&players, "players", "comma separated list of mls players")
 	flag.Var(&pos, "pos", "comma separated list of player positions")
@@ -285,13 +278,9 @@ func main() {
 	data := flag.String("data", "2018_09_15_data", "data file")
 	flag.Parse()
 
-	if len(clubs) == 0 {
-		clubs = allClubs
-	}
-
 	f, err := os.Open(*data)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	const (
@@ -310,42 +299,40 @@ func main() {
 		if len(tokens) < COMPENSATION+1 {
 			continue
 		}
-		if !clubs.hasVal(tokens[CLUB]) {
+		if pos != nil && !pos.HasVal(tokens[POSITION]) {
+			continue
+		} else if !allPos.HasVal(tokens[POSITION]) {
+			continue
+		}
+		if clubs != nil {
+			if _, ok := clubs[tokens[CLUB]]; !ok {
+				continue
+			}
+		} else if _, ok := allClubs[tokens[CLUB]]; !ok {
+			continue
+		}
+		name := fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
+		if players != nil && !players.HasVal(name) {
+			continue
+		}
+		if *dps && !allDPs.HasVal(name) {
 			continue
 		}
 
 		player := Player{}
-		for _, fullclub := range allClubs {
-			if fullclub.Name == tokens[CLUB] || fullclub.FullName == tokens[CLUB] {
-				player.Club.Name = fullclub.Name
-				player.Club.FullName = fullclub.FullName
-				break
-			}
-		}
+		player.Name = name
+		player.Club = allClubs[tokens[CLUB]]
 		player.Pos = tokens[POSITION]
-		player.Name = fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
 		player.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
 		player.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
 
-		if pos != nil && !pos.HasVal(player.Pos) {
-			continue
-		}
-
-		if players != nil && !players.HasVal(player.Name) {
-			continue
-		}
-
-		if *dps && !allDPs.HasVal(player.Name) {
-			continue
-		}
-
 		all = append(all, player)
-		clubTotals[player.Club.Name] += player.Compensation
+		clubTotals[player.Club] += player.Compensation
 	}
 
 	sort.Slice(all, func(i, j int) bool { return all[i].Compensation > all[j].Compensation })
 	if *club {
-		sort.SliceStable(all, func(i, j int) bool { return all[i].Club.Name < all[j].Club.Name })
+		sort.SliceStable(all, func(i, j int) bool { return all[i].Club < all[j].Club })
 	}
 
 	i := 1
@@ -356,7 +343,7 @@ func main() {
 			lastClub = data.Club
 			fmt.Println()
 		}
-		fmt.Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club.Name, data.Pos, data.Name, commaf(data.Compensation))
+		fmt.Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club, data.Pos, data.Name, commaf(data.Compensation))
 		i++
 	}
 
