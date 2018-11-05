@@ -28,7 +28,7 @@ type Players []Player
 func (p *Players) Set(s string) error {
 	names := strings.Split(s, ",")
 	for _, name := range names {
-		*p = append(*p, Player{Name: strings.ToLower(strings.TrimSpace(name))})
+		*p = append(*p, Player{Name: strings.TrimSpace(name)})
 	}
 	return nil
 }
@@ -43,7 +43,7 @@ func (p *Players) String() string {
 
 func (p *Players) HasVal(s string) bool {
 	for _, player := range *p {
-		if strings.Contains(strings.ToLower(s), player.Name) {
+		if strings.Contains(strings.ToLower(s), strings.ToLower(player.Name)) {
 			return true
 		}
 	}
@@ -133,77 +133,64 @@ func (ct *ClubTotals) Sort() []KeyValue {
 	return p
 }
 
-type DPs []string
-
-var allDPs = DPs{
-	"Fanendo Adi",
-	"Romain Alessandrini",
-	"Miguel Almiron",
-	"Jozy Altidore",
-	"Paul Arriola",
-	"Ezequiel Barco",
-	"Alejandro Bedoya",
-	"Sebastian Blanco",
-	"Michael Bradley",
-	"Josue Colman",
-	"Cristian Colman",
-	"Yohan Croizet",
-	"Clint Dempsey",
-	"Claude Dielna",
-	"Borek Dockal",
-	"Giovani dos Santos",
-	"Jonathan dos Santos",
-	"Dom Dwyer",
-	"Alberth Elis",
-	"Shkelzen Gashi",
-	"Sebastian Giovinco",
-	"Carlos Gruezo",
-	"Felipe Gutierrez",
-	"Federico Higuain",
-	"Andre Horta",
-	"Tim Howard",
-	"Sacha Kljestan",
-	"Nicolas Lodeiro",
-	"Josef Martinez",
-	"Tomas Martinez",
-	"Jesus Medina",
-	"Lucas Melano",
-	"Maxi Moralez",
-	"Santiago Mosquera",
-	"Nemanja Nikolic",
-	"Ignacio Piatti",
-	"Valeri \"Vako\" Qazaishvili",
-	"Darwin Quintero",
-	"Angelo Rodriguez",
-	"Wayne Rooney",
-	"Alejandro 'Kaku' Romero",
-	"Diego Rossi",
-	"Raul Ruidiaz",
-	"Johnny Russell",
-	"Albert Rusnak",
-	"Pedro Santos",
-	"Jefferson Savarino",
-	"Bastian Schweinsteiger",
-	"Brek Shea",
-	"Saphir Taider",
-	"Erick Torres",
-	"Milton Valenzuela",
-	"Diego Valeri",
-	"Carlos Vela",
-	"David Villa",
-	"Kendall Waston",
-	"Chris Wondolowski",
-	"Bradley Wright-Phillips",
-}
-
-func (d DPs) HasVal(name string) bool {
-	for _, val := range d {
-		if val == name {
-			return true
-		}
-	}
-	return false
-}
+var allDPs = `
+	Fanendo Adi,
+	Romain Alessandrini,
+	Miguel Almiron,
+	Jozy Altidore,
+	Paul Arriola,
+	Ezequiel Barco,
+	Alejandro Bedoya,
+	Sebastian Blanco,
+	Michael Bradley,
+	Josue Colman,
+	Cristian Colman,
+	Yohan Croizet,
+	Claude Dielna,
+	Borek Dockal,
+	Giovani dos Santos,
+	Jonathan dos Santos,
+	Dom Dwyer,
+	Alberth Elis,
+	Shkelzen Gashi,
+	Sebastian Giovinco,
+	Carlos Gruezo,
+	Felipe Gutierrez,
+	Federico Higuain,
+	Andre Horta,
+	Tim Howard,
+	Sacha Kljestan,
+	Nicolas Lodeiro,
+	Josef Martinez,
+	Tomas Martinez,
+	Jesus Medina,
+	Lucas Melano,
+	Maxi Moralez,
+	Santiago Mosquera,
+	Nemanja Nikolic,
+	Ignacio Piatti,
+	Valeri "Vako" Qazaishvili,
+	Darwin Quintero,
+	Angelo Rodriguez,
+	Wayne Rooney,
+	Alejandro 'Kaku' Romero,
+	Diego Rossi,
+	Raul Ruidiaz,
+	Johnny Russell,
+	Albert Rusnak,
+	Pedro Santos,
+	Jefferson Savarino,
+	Bastian Schweinsteiger,
+	Brek Shea,
+	Saphir Taider,
+	Milton Valenzuela,
+	Diego Valeri,
+	Carlos Vela,
+	David Villa,
+	Kendall Waston,
+	Chris Wondolowski,
+	Bradley Wright-Phillips
+`
 
 type Pos []string
 
@@ -264,17 +251,18 @@ func commaf(v float64) string {
 
 func main() {
 	var (
-		all     Players
-		clubs   Clubs
-		players Players
-		pos     Pos
+		all        Players
+		clubs      Clubs
+		players    Players
+		pos        Pos
+		clubTotals = make(ClubTotals, len(allClubs))
 	)
 	log.SetFlags(0)
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
 	flag.Var(&players, "players", "comma separated list of mls players")
 	flag.Var(&pos, "pos", "comma separated list of player positions")
 	club := flag.Bool("sort", true, "sort by club")
-	dps := flag.Bool("dp", false, "only show DP players")
+	dp := flag.Bool("dp", false, "only show DP players")
 	data := flag.String("data", "2018_09_15_data", "data file")
 	flag.Parse()
 
@@ -282,6 +270,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	scanner := bufio.NewScanner(f)
+
+	dps := Players{}
+	dps.Set(allDPs)
 
 	const (
 		FIRSTNAME = iota
@@ -292,30 +284,32 @@ func main() {
 		COMPENSATION
 	)
 
-	scanner := bufio.NewScanner(f)
-	clubTotals := make(ClubTotals, 30)
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), "\t")
+
 		if len(tokens) < COMPENSATION+1 {
 			continue
 		}
-		if pos != nil && !pos.HasVal(tokens[POSITION]) {
-			continue
-		} else if !allPos.HasVal(tokens[POSITION]) {
-			continue
-		}
-		if clubs != nil {
-			if _, ok := clubs[tokens[CLUB]]; !ok {
-				continue
-			}
-		} else if _, ok := allClubs[tokens[CLUB]]; !ok {
-			continue
-		}
+
 		name := fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
-		if players != nil && !players.HasVal(name) {
+
+		switch {
+		case clubs != nil && clubs[tokens[CLUB]] == "":
 			continue
-		}
-		if *dps && !allDPs.HasVal(name) {
+
+		case allClubs[tokens[CLUB]] == "":
+			continue
+
+		case !allPos.HasVal(tokens[POSITION]):
+			continue
+
+		case pos != nil && !pos.HasVal(tokens[POSITION]):
+			continue
+
+		case *dp && !dps.HasVal(name):
+			continue
+
+		case players != nil && !players.HasVal(name):
 			continue
 		}
 
@@ -328,6 +322,11 @@ func main() {
 
 		all = append(all, player)
 		clubTotals[player.Club] += player.Compensation
+	}
+
+	if len(all) == 0 {
+		fmt.Println("No matches found")
+		return
 	}
 
 	sort.Slice(all, func(i, j int) bool { return all[i].Compensation > all[j].Compensation })
@@ -351,4 +350,10 @@ func main() {
 	for i, v := range clubTotals.Sort() {
 		fmt.Printf("%-2d %-5s total: %s\n", i+1, v.Key, commaf(v.Value))
 	}
+
+	//for _, n := range dps {
+	//	if !all.HasVal(n.Name) {
+	//		fmt.Println("dp not found:", n.Name)
+	//	}
+	//}
 }
