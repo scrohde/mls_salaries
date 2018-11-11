@@ -6,10 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
+
+	rice "github.com/GeertJohan/go.rice"
 )
 
 // Player is an MLS player
@@ -266,7 +267,8 @@ func main() {
 	data := flag.String("data", "2018_09_15_data", "data file")
 	flag.Parse()
 
-	f, err := os.Open(*data)
+	box := rice.MustFindBox("data")
+	f, err := box.Open(*data)
 	if err != nil {
 		log.Fatal(err)
 	}
