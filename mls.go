@@ -6,12 +6,29 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-
-	rice "github.com/GeertJohan/go.rice"
+	"syscall"
 )
+
+var Debug = false
+
+func Printf(format string, a ...interface{}) (n int, err error) {
+	if !Debug {
+		return fmt.Fprintf(os.Stdout, format, a...)
+	}
+	return 0, nil
+}
+func Dprintln(a ...interface{}) (n int, err error) {
+	if Debug {
+		return fmt.Fprintln(os.Stdout, a...)
+	}
+	return 0, nil
+}
 
 // Player is an MLS player
 type Player struct {
@@ -102,6 +119,24 @@ func (c *Clubs) getKey(v string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (c *Clubs) HasVal(s string) bool {
+	if _, ok := (*c)[s]; ok {
+		return true
+	}
+	_, ok := (*c).getKey(s)
+	return ok
+}
+
+func (c *Clubs) Abv(s string) string {
+	if abv, ok := (*c)[s]; ok {
+		return abv
+	}
+	if _, ok := (*c).getKey(s); ok {
+		return s
+	}
+	return ""
 }
 
 // String returns club names as a comma separated list of abbreviated names
@@ -265,10 +300,21 @@ func main() {
 	club := flag.Bool("sort", true, "sort by club")
 	dp := flag.Bool("dp", false, "only show DP players")
 	data := flag.String("data", "2018_09_15_data", "data file")
+	flag.BoolVar(&Debug, "debug", false, "print data lines that don't match")
 	flag.Parse()
 
-	box := rice.MustFindBox("data")
-	f, err := box.Open(*data)
+	if _, err := os.Stat(*data); err != nil {
+		if e, ok := err.(*os.PathError).Err.(syscall.Errno); ok && e == 2 {
+			// no such file or dir
+			if *data, ok = dataFromSource(*data); !ok {
+				log.Fatal(err)
+			}
+		} else {
+			log.Fatal(err)
+		}
+	}
+
+	f, err := os.Open(*data)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -290,6 +336,7 @@ func main() {
 		tokens := strings.Split(scanner.Text(), "\t")
 
 		if len(tokens) < COMPENSATION+1 {
+			Dprintln("not matched:", scanner.Text())
 			continue
 		}
 
@@ -297,27 +344,33 @@ func main() {
 
 		switch {
 		case clubs != nil && clubs[tokens[CLUB]] == "":
+			Dprintln("not matched:", scanner.Text())
 			continue
 
-		case allClubs[tokens[CLUB]] == "":
+		case !allClubs.HasVal(tokens[CLUB]):
+			Dprintln("not matched:", scanner.Text())
 			continue
 
 		case !allPos.HasVal(tokens[POSITION]):
+			Dprintln("not matched:", scanner.Text())
 			continue
 
 		case pos != nil && !pos.HasVal(tokens[POSITION]):
+			Dprintln("not matched:", scanner.Text())
 			continue
 
 		case *dp && !dps.HasVal(name):
+			Dprintln("not matched:", scanner.Text())
 			continue
 
 		case players != nil && !players.HasVal(name):
+			Dprintln("not matched:", scanner.Text())
 			continue
 		}
 
 		player := Player{}
 		player.Name = name
-		player.Club = allClubs[tokens[CLUB]]
+		player.Club = allClubs.Abv(tokens[CLUB])
 		player.Pos = tokens[POSITION]
 		player.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
 		player.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
@@ -344,18 +397,31 @@ func main() {
 			lastClub = data.Club
 			fmt.Println()
 		}
-		fmt.Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club, data.Pos, data.Name, commaf(data.Compensation))
+		Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club, data.Pos, data.Name, commaf(data.Compensation))
 		i++
 	}
 
 	fmt.Print("\n\n")
 	for i, v := range clubTotals.Sort() {
-		fmt.Printf("%-2d %-5s total: %s\n", i+1, v.Key, commaf(v.Value))
+		Printf("%-2d %-5s total: %s\n", i+1, v.Key, commaf(v.Value))
 	}
 
-	//for _, n := range dps {
-	//	if !all.HasVal(n.Name) {
-	//		fmt.Println("dp not found:", n.Name)
-	//	}
-	//}
+	for _, n := range dps {
+		if !all.HasVal(n.Name) {
+			Dprintln("dp not found:", n.Name)
+		}
+	}
+}
+
+func dataFromSource(data string) (string, bool) {
+	_, f, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", false
+	}
+	path := filepath.Join(filepath.Dir(f), "data", data)
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", false
+	}
+	return path, fi.Mode().IsRegular()
 }
