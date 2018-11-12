@@ -15,19 +15,21 @@ import (
 	"syscall"
 )
 
+// Debug controls if debug info is printed
 var Debug = false
 
-func Printf(format string, a ...interface{}) (n int, err error) {
+//Printf prints if Debug is false
+func Printf(format string, a ...interface{}) {
 	if !Debug {
-		return fmt.Fprintf(os.Stdout, format, a...)
+		fmt.Printf(format, a...)
 	}
-	return 0, nil
 }
-func Dprintln(a ...interface{}) (n int, err error) {
+
+//Dprintln prints if Debug is true
+func Dprintln(a ...interface{}) {
 	if Debug {
-		return fmt.Fprintln(os.Stdout, a...)
+		fmt.Println(a...)
 	}
-	return 0, nil
 }
 
 // Player is an MLS player
@@ -59,6 +61,7 @@ func (p *Players) String() string {
 	return strings.Join(names, ", ")
 }
 
+// HasVal return true if any players name contains s
 func (p *Players) HasVal(s string) bool {
 	for _, player := range *p {
 		if strings.Contains(strings.ToLower(s), strings.ToLower(player.Name)) {
@@ -96,6 +99,8 @@ var allClubs = Clubs{
 	"Portland Timbers":       "POR",
 	"Real Salt Lake":         "RSL",
 	"FC Cincinnati":          "CIN",
+	"NY":                     "NYRB",
+	"Chivas USA":             "CHV",
 }
 
 // Set sets the value of clubs
@@ -121,6 +126,7 @@ func (c *Clubs) getKey(v string) (string, bool) {
 	return "", false
 }
 
+// HasVal returns true if s is the full or abbreviated name of a club
 func (c *Clubs) HasVal(s string) bool {
 	if _, ok := (*c)[s]; ok {
 		return true
@@ -129,6 +135,7 @@ func (c *Clubs) HasVal(s string) bool {
 	return ok
 }
 
+// Abv returns the abbreviated name of a club
 func (c *Clubs) Abv(s string) string {
 	if abv, ok := (*c)[s]; ok {
 		return abv
@@ -228,10 +235,12 @@ var allDPs = `
 	Bradley Wright-Phillips
 `
 
+// Pos is the set of player positions
 type Pos []string
 
-var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M"}
+var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M-D", "M", "M/F"}
 
+// HasVal returns true if s is in p
 func (p *Pos) HasVal(s string) bool {
 	s = strings.ToUpper(s)
 	for _, pos := range *p {
@@ -242,6 +251,7 @@ func (p *Pos) HasVal(s string) bool {
 	return false
 }
 
+// Set sets the value of p from a comma separated list of positions
 func (p *Pos) Set(s string) error {
 	for _, pos := range strings.Split(s, ",") {
 		pos = strings.ToUpper(strings.TrimSpace(pos))
@@ -307,73 +317,87 @@ func main() {
 		if e, ok := err.(*os.PathError).Err.(syscall.Errno); ok && e == 2 {
 			// no such file or dir
 			if *data, ok = dataFromSource(*data); !ok {
-				log.Fatal(err)
+				log.Fatal("unable to read data:", err)
 			}
 		} else {
-			log.Fatal(err)
+			log.Fatal("unable to read data:", err)
 		}
 	}
+
+	dps := Players{}
+	_ = dps.Set(allDPs)
 
 	f, err := os.Open(*data)
 	if err != nil {
 		log.Fatal(err)
 	}
 	scanner := bufio.NewScanner(f)
-
-	dps := Players{}
-	dps.Set(allDPs)
-
-	const (
-		FIRSTNAME = iota
-		LASTNAME
-		CLUB
-		POSITION
-		BASESALARY
-		COMPENSATION
-	)
-
 	for scanner.Scan() {
-		tokens := strings.Split(scanner.Text(), "\t")
-
-		if len(tokens) < COMPENSATION+1 {
-			Dprintln("not matched:", scanner.Text())
-			continue
+		sep := " "
+		if strings.Contains(scanner.Text(), "\t") {
+			sep = "\t"
 		}
-
-		name := fmt.Sprintf("%s %s", tokens[FIRSTNAME], tokens[LASTNAME])
-
-		switch {
-		case clubs != nil && clubs[tokens[CLUB]] == "":
-			Dprintln("not matched:", scanner.Text())
-			continue
-
-		case !allClubs.HasVal(tokens[CLUB]):
-			Dprintln("not matched:", scanner.Text())
-			continue
-
-		case !allPos.HasVal(tokens[POSITION]):
-			Dprintln("not matched:", scanner.Text())
-			continue
-
-		case pos != nil && !pos.HasVal(tokens[POSITION]):
-			Dprintln("not matched:", scanner.Text())
-			continue
-
-		case *dp && !dps.HasVal(name):
-			Dprintln("not matched:", scanner.Text())
-			continue
-
-		case players != nil && !players.HasVal(name):
-			Dprintln("not matched:", scanner.Text())
-			continue
-		}
-
+		tokens := strings.Split(scanner.Text(), sep)
 		player := Player{}
-		player.Name = name
-		player.Club = allClubs.Abv(tokens[CLUB])
-		player.Pos = tokens[POSITION]
-		player.BaseSalary, err = strconv.ParseFloat(strings.Replace(tokens[BASESALARY][1:], ",", "", -1), 32)
-		player.Compensation, err = strconv.ParseFloat(strings.Replace(tokens[COMPENSATION][1:], ",", "", -1), 32)
+		for _, token := range tokens {
+			if token == "" {
+				continue
+			}
+			switch {
+			case allClubs.HasVal(token):
+				player.Club = allClubs.Abv(token)
+
+			case allPos.HasVal(token):
+				player.Pos = token
+
+			case token[0] == '$', token[0] >= '0' && token[0] <= '9':
+				token = strings.TrimLeft(token, "$")
+				if token == "" {
+					continue
+				}
+				val, err := strconv.ParseFloat(strings.Replace(token, ",", "", -1), 32)
+				if err != nil {
+					continue
+				}
+				if player.BaseSalary == 0 {
+					player.BaseSalary = val
+				} else {
+					player.Compensation = val
+				}
+
+			default:
+				if player.Name == "" {
+					player.Name = token
+				} else {
+					player.Name += " " + token
+				}
+			}
+		}
+		if player.Club == "" && player.Pos == "" && player.Compensation < 30000.00 {
+			Dprintln("no match:", player)
+			continue
+		}
+		if clubs != nil && !clubs.HasVal(player.Club) {
+			continue
+		}
+		if pos != nil && !pos.HasVal(player.Pos) {
+			continue
+		}
+		if *dp && !dps.HasVal(player.Name) {
+			continue
+		}
+		if players != nil && !players.HasVal(player.Name) {
+			continue
+		}
+		if player.Club == "" {
+			Dprintln("no club", player)
+		}
+		if player.Pos == "" {
+			Dprintln("no pos", player)
+		}
+		if player.Compensation < 30000.00 {
+			Dprintln("no compensation", player)
+		}
 
 		all = append(all, player)
 		clubTotals[player.Club] += player.Compensation
@@ -395,17 +419,18 @@ func main() {
 		if *club && data.Club != lastClub {
 			i = 1
 			lastClub = data.Club
-			fmt.Println()
+			Printf("\n")
 		}
 		Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club, data.Pos, data.Name, commaf(data.Compensation))
 		i++
 	}
 
-	fmt.Print("\n\n")
+	Printf("\n\n")
 	for i, v := range clubTotals.Sort() {
 		Printf("%-2d %-5s total: %s\n", i+1, v.Key, commaf(v.Value))
 	}
 
+	Dprintln()
 	for _, n := range dps {
 		if !all.HasVal(n.Name) {
 			Dprintln("dp not found:", n.Name)
