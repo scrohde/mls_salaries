@@ -331,12 +331,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	scanner := bufio.NewScanner(f)
+	r := bufio.NewReader(f)
+	var sep = " "
+	if b, _ := r.ReadByte(); string(b) == "\t" {
+		sep = "\t"
+	} else {
+		_ = r.UnreadByte()
+	}
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		sep := " "
-		if strings.Contains(scanner.Text(), "\t") {
-			sep = "\t"
-		}
 		tokens := strings.Split(scanner.Text(), sep)
 		player := Player{}
 		for _, token := range tokens {
