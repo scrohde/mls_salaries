@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,24 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 )
-
-// Debug controls if debug info is printed
-var Debug = false
-
-//Printf prints if Debug is false
-func Printf(format string, a ...interface{}) {
-	if !Debug {
-		fmt.Printf(format, a...)
-	}
-}
-
-//Dprintln prints if Debug is true
-func Dprintln(a ...interface{}) {
-	if Debug {
-		fmt.Println(a...)
-	}
-}
 
 // Player is an MLS player
 type Player struct {
@@ -301,17 +287,23 @@ func main() {
 		clubs      Clubs
 		players    Players
 		pos        Pos
+		club       = flag.Bool("sort", true, "sort by club")
+		dp         = flag.Bool("dp", false, "only show DP players")
+		data       = flag.String("data", "2018_09_15_data", "data file")
+		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		clubTotals = make(ClubTotals, len(allClubs))
 	)
 	log.SetFlags(0)
 	flag.Var(&clubs, "clubs", "comma separated list of mls clubs")
 	flag.Var(&players, "players", "comma separated list of mls players")
 	flag.Var(&pos, "pos", "comma separated list of player positions")
-	club := flag.Bool("sort", true, "sort by club")
-	dp := flag.Bool("dp", false, "only show DP players")
-	data := flag.String("data", "2018_09_15_data", "data file")
-	flag.BoolVar(&Debug, "debug", false, "print data lines that don't match")
 	flag.Parse()
+
+	debugln := func(a ...interface{}) {
+		if *debug {
+			fmt.Println(a...)
+		}
+	}
 
 	if _, err := os.Stat(*data); err != nil {
 		if e, ok := err.(*os.PathError).Err.(syscall.Errno); ok && e == 2 {
@@ -377,7 +369,7 @@ func main() {
 			}
 		}
 		if player.Club == "" && player.Pos == "" && player.Compensation < 30000.00 {
-			Dprintln("no match:", player)
+			debugln("no match:", player)
 			continue
 		}
 		if clubs != nil && !clubs.HasVal(player.Club) {
@@ -393,13 +385,13 @@ func main() {
 			continue
 		}
 		if player.Club == "" {
-			Dprintln("no club", player)
+			debugln("no club", player)
 		}
 		if player.Pos == "" {
-			Dprintln("no pos", player)
+			debugln("no pos", player)
 		}
 		if player.Compensation < 30000.00 {
-			Dprintln("no compensation", player)
+			debugln("no compensation", player)
 		}
 
 		all = append(all, player)
@@ -415,28 +407,37 @@ func main() {
 	if *club {
 		sort.SliceStable(all, func(i, j int) bool { return all[i].Club < all[j].Club })
 	}
-
+	var w io.Writer
+	if !*debug {
+		w = os.Stdout
+	} else {
+		w = ioutil.Discard
+	}
+	t := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	i := 1
 	lastClub := all[0].Club
 	for _, data := range all {
 		if *club && data.Club != lastClub {
 			i = 1
 			lastClub = data.Club
-			Printf("\n")
+			check(fmt.Fprintln(t))
 		}
-		Printf("%-3d %-5s %-3s %-25s: %s\n", i, data.Club, data.Pos, data.Name, commaf(data.Compensation))
+		check(fmt.Fprintf(t, "%d\t%s\t%s\t%s\t%s\n", i, data.Club, data.Pos, data.Name, commaf(data.Compensation)))
 		i++
 	}
 
-	Printf("\n\n")
+	check(fmt.Fprintf(t, "\n\n"))
 	for i, v := range clubTotals.Sort() {
-		Printf("%-2d %-5s total: %s\n", i+1, v.Key, commaf(v.Value))
+		check(fmt.Fprintf(t, "%d\t%s\ttotal: %s\n", i+1, v.Key, commaf(v.Value)))
 	}
-
-	Dprintln()
+	err = t.Flush()
+	if err != nil {
+		log.Fatal(err)
+	}
+	debugln()
 	for _, n := range dps {
 		if !all.HasVal(n.Name) {
-			Dprintln("dp not found:", n.Name)
+			debugln("dp not found:", n.Name)
 		}
 	}
 }
@@ -452,4 +453,10 @@ func dataFromSource(data string) (string, bool) {
 		return "", false
 	}
 	return path, fi.Mode().IsRegular()
+}
+
+func check(n int, err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
