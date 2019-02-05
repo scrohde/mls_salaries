@@ -282,6 +282,25 @@ func commaf(v float64) string {
 }
 
 func main() {
+	flag.Usage = func() {
+		var files []string
+
+		fmt.Printf("Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+		ff, err := dataFilesFromSource()
+		check(0, err)
+		for _, f := range ff {
+			if strings.HasSuffix(f.Name(), "_data") {
+				files = append(files, f.Name())
+			}
+		}
+		if len(files) > 0 {
+			fmt.Printf("\ndata files: \n")
+			for i := 0; i < len(files); i += 2 {
+				fmt.Printf("  %s, %s\n", files[i], files[i+1])
+			}
+		}
+	}
 	var (
 		all        Players
 		clubs      Clubs
@@ -455,7 +474,15 @@ func dataFromSource(data string) (string, bool) {
 	return path, fi.Mode().IsRegular()
 }
 
-func check(n int, err error) {
+func dataFilesFromSource() ([]os.FileInfo, error) {
+	_, f, _, ok := runtime.Caller(0)
+	if !ok {
+		return nil, nil
+	}
+	return ioutil.ReadDir(filepath.Join(filepath.Dir(f), "data"))
+}
+
+func check(_ interface{}, err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
