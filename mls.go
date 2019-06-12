@@ -295,6 +295,9 @@ func main() {
 			}
 		}
 		if len(files) > 0 {
+			if len(files)%2 != 0 {
+				files = append(files, "")
+			}
 			fmt.Printf("\ndata files: \n")
 			for i := 0; i < len(files); i += 2 {
 				fmt.Printf("  %s, %s\n", files[i], files[i+1])
@@ -308,7 +311,7 @@ func main() {
 		pos        Pos
 		club       = flag.Bool("sort", true, "sort by club")
 		dp         = flag.Bool("dp", false, "only show DP players")
-		data       = flag.String("data", "2018_09_15_data", "data file")
+		data       = flag.String("data", "2019_06_12_data", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		clubTotals = make(ClubTotals, len(allClubs))
 	)
