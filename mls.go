@@ -311,7 +311,7 @@ func main() {
 		pos        Pos
 		club       = flag.Bool("sort", true, "sort by club")
 		dp         = flag.Bool("dp", false, "only show DP players")
-		data       = flag.String("data", "2019_06_12_data", "data file")
+		data       = flag.String("data", "2019_09_13_data", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		clubTotals = make(ClubTotals, len(allClubs))
 	)
