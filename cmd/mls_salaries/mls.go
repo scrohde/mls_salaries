@@ -469,7 +469,7 @@ func dataFromSource(data string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	path := filepath.Join(filepath.Dir(f), "data", data)
+	path := filepath.Join(filepath.Dir(f)+"../../..", "data", data)
 	fi, err := os.Stat(path)
 	if err != nil {
 		return "", false
@@ -482,7 +482,7 @@ func dataFilesFromSource() ([]os.FileInfo, error) {
 	if !ok {
 		return nil, nil
 	}
-	return ioutil.ReadDir(filepath.Join(filepath.Dir(f), "data"))
+	return ioutil.ReadDir(filepath.Join(filepath.Dir(f)+"../../..", "data"))
 }
 
 func check(_ interface{}, err error) {
