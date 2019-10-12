@@ -60,7 +60,6 @@ func (c *Clubs) String() string {
 
 var allClubs = Clubs{
 	"COL",
-	"LAF",
 	"LAG",
 	"MIN",
 	"ORL",
@@ -73,7 +72,7 @@ var allClubs = Clubs{
 	"RSL",
 	"CIN",
 	"SJE",
-	"NYR",
+	"SKC",
 	"VAN",
 	"NER",
 	"DCU",
@@ -82,6 +81,8 @@ var allClubs = Clubs{
 	"TOR",
 	"NYC",
 	"NYRB",
+	"SEA",
+	"MTL",
 }
 
 func main() {
@@ -117,7 +118,7 @@ func main() {
 		check(err)
 
 		if len(*clubs) != 0 {
-			if ! clubs.Has(record[3]) {
+			if !clubs.Has(record[3]) {
 				continue
 			}
 		}
