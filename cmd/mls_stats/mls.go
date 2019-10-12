@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -25,11 +26,73 @@ type Player struct {
 	Goals        int
 	Assists      int
 	Compensation float64
+	GAPerDollar  float64
+}
+
+type Clubs []string
+
+func (c *Clubs) Set(v string) error {
+	clubs := strings.Split(v, ",")
+	for _, club := range clubs {
+		club = strings.ToUpper(strings.TrimSpace(club))
+		if allClubs.Has(club) {
+			*c = append(*c, club)
+		} else {
+			return fmt.Errorf("valid clubs: %s", allClubs)
+		}
+	}
+	return nil
+}
+func (c *Clubs) Has(v string) bool {
+	for _, club := range *c {
+		if v == club {
+			return true
+		}
+	}
+	return false
+}
+func (c *Clubs) String() string {
+	if c == nil {
+		return ""
+	}
+	return strings.Join(*c, ", ")
+}
+
+var allClubs = Clubs{
+	"COL",
+	"LAF",
+	"LAG",
+	"MIN",
+	"ORL",
+	"CLB",
+	"PHI",
+	"CHI",
+	"HOU",
+	"FCD",
+	"POR",
+	"RSL",
+	"CIN",
+	"SJE",
+	"NYR",
+	"VAN",
+	"NER",
+	"DCU",
+	"ATL",
+	"LAFC",
+	"TOR",
+	"NYC",
+	"NYRB",
 }
 
 func main() {
-	var r *csv.Reader
-	var players []Player
+	var (
+		r       *csv.Reader
+		players []Player
+		clubs   = &Clubs{}
+	)
+
+	flag.Var(clubs, "clubs", "comma separated list of clubs")
+	flag.Parse()
 
 	filename := "ASAshootertable.csv"
 	if path, ok := dataFromSource(filename); !ok {
@@ -53,6 +116,11 @@ func main() {
 		}
 		check(err)
 
+		if len(*clubs) != 0 {
+			if ! clubs.Has(record[3]) {
+				continue
+			}
+		}
 		comp, err := strconv.ParseFloat(record[27], 32)
 		if err != nil {
 			comp = 0
@@ -80,26 +148,37 @@ func main() {
 			Goals:        goals,
 			Assists:      assists,
 			Compensation: comp,
+			GAPerDollar:  comp / float64(goals+assists),
 		}
 		players = append(players, p)
 	}
 
+	dollars := []float64{}
+	var median float64
+	for _, p := range players {
+		if p.GAPerDollar > 0 && p.Pos != "CDM" && p.Pos != "CB" && p.Pos != "GK" {
+			dollars = append(dollars, p.GAPerDollar)
+		}
+	}
+	sort.Float64s(dollars)
+	half := len(dollars) / 2
+	if len(dollars)%2 != 0 {
+		// odd
+		median = (dollars[half-1] + dollars[half]) / 2
+	} else if half != 0 {
+		median = dollars[half]
+	}
+	fmt.Println("median dollars per goals+assists:", commaf(median))
 	sort.Slice(players, func(i, j int) bool { return players[i].Compensation > players[j].Compensation })
 	sort.SliceStable(players, func(i, j int) bool { return players[i].Goals+players[i].Assists > players[j].Goals+players[j].Assists })
 	sort.SliceStable(players, func(i, j int) bool {
-		combinedI := players[i].Goals + players[i].Assists
-		combinedJ := players[j].Goals + players[j].Assists
-		perDollarI := players[i].Compensation / float64(combinedI)
-		perDollarJ := players[j].Compensation / float64(combinedJ)
-		return perDollarI < perDollarJ
+		return players[i].GAPerDollar < players[j].GAPerDollar
 	})
 
 	w := os.Stdout
 	t := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for i, data := range players {
-		combined := data.Goals + data.Assists
-		per := data.Compensation / float64(combined)
-		_, err := fmt.Fprintf(t, "%d\t%s\t%s\t%d/%d\t%s\t%s\t(%s)\n", i, data.Club, data.Pos, data.Goals, data.Assists, data.Name, commaf(data.Compensation), commaf(per))
+		_, err := fmt.Fprintf(t, "%d\t%s\t%s\t%d/%d\t%s\t%s\t(%s)\n", i, data.Club, data.Pos, data.Goals, data.Assists, data.Name, commaf(data.Compensation), commaf(data.GAPerDollar))
 		check(err)
 	}
 	check(t.Flush())
