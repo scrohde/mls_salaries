@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
-	"golang.org/x/xerrors"
 	"io"
 	"log"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+
+	"golang.org/x/xerrors"
 )
 
 // Player is an MLS player
@@ -32,7 +33,8 @@ func main() {
 
 	filename := "ASAshootertable.csv"
 	if path, ok := dataFromSource(filename); !ok {
-		fmt.Printf("%+v", xerrors.Errorf("unable ot find data file: %s: %w", filename))
+		//fmt.Printf("%+v", xerrors.Errorf("unable ot find data file: %s", filename))
+		fmt.Printf("%+v", xerrors.Errorf("unable ot find data file: %s", filename))
 		os.Exit(1)
 	} else {
 		f, err := os.Open(path)
@@ -65,11 +67,11 @@ func main() {
 			assists = 0
 		}
 		/*
-		0: First 1: Last 2: Player 3: Team 4: Season 5: Min 6: Pos 7: Shots 8: SoT 9: Dist 10: Solo 11: G 12: xG
-		13: xPlace 14: G-xG 15: KeyP 16: Dist.key 17: A 18: xA 19: A-xA 20: xG+xA 21: PA 22: xPA 23: xG/shot 24: xA/pass
-		25: G-xG/shot 26: A-xA/pass 27: Comp ($K) 28: Team/96 29: Min/96 30: Pos/96 31: Shots/96 32: SoT/96 33: G/96
-		34: xG/96 35: xPlace/96 36: G-xG/96 37: KeyP/96 38: A/96 39: xA/96 40: A-xA/96 41: xG+xA/96 42: PA/96 43: xPA/96
-		44: Comp ($K)/96 45: extreme1 46: extreme2 47: plotnames
+			0: First 1: Last 2: Player 3: Team 4: Season 5: Min 6: Pos 7: Shots 8: SoT 9: Dist 10: Solo 11: G 12: xG
+			13: xPlace 14: G-xG 15: KeyP 16: Dist.key 17: A 18: xA 19: A-xA 20: xG+xA 21: PA 22: xPA 23: xG/shot
+			24: xA/pass 25: G-xG/shot 26: A-xA/pass 27: Comp ($K) 28: Team/96 29: Min/96 30: Pos/96 31: Shots/96
+			32: SoT/96 33: G/96 34: xG/96 35: xPlace/96 36: G-xG/96 37: KeyP/96 38: A/96 39: xA/96 40: A-xA/96
+			41: xG+xA/96 42: PA/96 43: xPA/96 44: Comp ($K)/96 45: extreme1 46: extreme2 47: plotnames
 		*/
 		p := Player{
 			Club:         record[3],
@@ -84,12 +86,19 @@ func main() {
 
 	sort.Slice(players, func(i, j int) bool { return players[i].Compensation > players[j].Compensation })
 	sort.SliceStable(players, func(i, j int) bool { return players[i].Goals+players[i].Assists > players[j].Goals+players[j].Assists })
+	sort.SliceStable(players, func(i, j int) bool {
+		combinedI := players[i].Goals + players[i].Assists
+		combinedJ := players[j].Goals + players[j].Assists
+		perDollarI := players[i].Compensation / float64(combinedI)
+		perDollarJ := players[j].Compensation / float64(combinedJ)
+		return perDollarI < perDollarJ
+	})
 
 	w := os.Stdout
 	t := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for i, data := range players {
 		combined := data.Goals + data.Assists
-		per := data.Compensation/float64(combined)
+		per := data.Compensation / float64(combined)
 		_, err := fmt.Fprintf(t, "%d\t%s\t%s\t%d/%d\t%s\t%s\t(%s)\n", i, data.Club, data.Pos, data.Goals, data.Assists, data.Name, commaf(data.Compensation), commaf(per))
 		check(err)
 	}
@@ -131,7 +140,7 @@ func dataFromSource(data string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	path := filepath.Join(filepath.Dir(f)+"../../..", "data", data)
+	path := filepath.Join(filepath.Dir(f), "../..", "data", data)
 	fi, err := os.Stat(path)
 	if err != nil {
 		return "", false
