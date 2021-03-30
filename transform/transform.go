@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -40,7 +39,7 @@ func transformDPs(s string) []string {
 }
 
 func main() {
-	b, err := ioutil.ReadFile(os.Args[1])
+	b, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}

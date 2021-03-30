@@ -2,20 +2,17 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
-
-	"golang.org/x/xerrors"
 )
 
 // Player is an MLS player
@@ -85,6 +82,9 @@ var allClubs = Clubs{
 	"MTL",
 }
 
+//go:embed ASAshootertable.csv
+var dataFS embed.FS
+
 func main() {
 	var (
 		r       *csv.Reader
@@ -95,17 +95,10 @@ func main() {
 	flag.Var(clubs, "clubs", "comma separated list of clubs")
 	flag.Parse()
 
-	filename := "ASAshootertable.csv"
-	if path, ok := dataFromSource(filename); !ok {
-		//fmt.Printf("%+v", xerrors.Errorf("unable ot find data file: %s", filename))
-		fmt.Printf("%+v", xerrors.Errorf("unable ot find data file: %s", filename))
-		os.Exit(1)
-	} else {
-		f, err := os.Open(path)
-		check(err)
-		r = csv.NewReader(f)
-	}
-	_, err := r.Read()
+	f, err := dataFS.Open("ASAshootertable.csv")
+	check(err)
+	r = csv.NewReader(f)
+	_, err = r.Read()
 	//for i, title := range titles {
 	//	fmt.Printf("%d: %s\n", i, title)
 	//}
@@ -213,19 +206,6 @@ func commaf(v float64) string {
 		buf.WriteString(parts[1])
 	}
 	return buf.String()
-}
-
-func dataFromSource(data string) (string, bool) {
-	_, f, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", false
-	}
-	path := filepath.Join(filepath.Dir(f), "../..", "data", data)
-	fi, err := os.Stat(path)
-	if err != nil {
-		return "", false
-	}
-	return path, fi.Mode().IsRegular()
 }
 
 func check(err error) {

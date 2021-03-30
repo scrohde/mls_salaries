@@ -3,20 +3,22 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"embed"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"text/tabwriter"
 )
+
+//go:embed data/*
+var dataFS embed.FS
 
 // Player is an MLS player
 type Player struct {
@@ -47,7 +49,7 @@ func (p *Players) String() string {
 	return strings.Join(names, ", ")
 }
 
-// HasVal return true if any players name contains s
+// HasVal returns true if any players name contains s
 func (p *Players) HasVal(s string) bool {
 	for _, player := range *p {
 		if strings.Contains(strings.ToLower(s), strings.ToLower(player.Name)) {
@@ -283,24 +285,17 @@ func commaf(v float64) string {
 
 func main() {
 	flag.Usage = func() {
-		var files []string
-
 		fmt.Printf("Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
-		ff, err := dataFilesFromSource()
+		files, err := fs.Glob(dataFS, "data/*_data")
 		check(0, err)
-		for _, f := range ff {
-			if strings.HasSuffix(f.Name(), "_data") {
-				files = append(files, f.Name())
-			}
-		}
 		if len(files) > 0 {
 			if len(files)%2 != 0 {
-				files = append(files, "")
+				files = append(files, "data/")
 			}
 			fmt.Printf("\ndata files: \n")
 			for i := 0; i < len(files); i += 2 {
-				fmt.Printf("  %s, %s\n", files[i], files[i+1])
+				fmt.Printf("  %s, %s\n", files[i][len("data/"):], files[i+1][len("data/"):])
 			}
 		}
 	}
@@ -327,25 +322,21 @@ func main() {
 		}
 	}
 
-	if _, err := os.Stat(*data); err != nil {
-		if e, ok := err.(*os.PathError).Err.(syscall.Errno); ok && e == 2 {
-			// no such file or dir
-			if *data, ok = dataFromSource(*data); !ok {
-				log.Fatal("unable to read data:", err)
-			}
-		} else {
-			log.Fatal("unable to read data:", err)
-		}
-	}
-
 	dps := Players{}
 	_ = dps.Set(allDPs)
 
+	var r *bufio.Reader
 	f, err := os.Open(*data)
 	if err != nil {
-		log.Fatal(err)
+		f, err := dataFS.Open("data/" + *data)
+		if err != nil {
+			log.Fatal(err)
+		}
+		r = bufio.NewReader(f)
+	} else {
+		r = bufio.NewReader(f)
 	}
-	r := bufio.NewReader(f)
+
 	var sep = " "
 	if b, _ := r.ReadByte(); string(b) == "\t" {
 		sep = "\t"
@@ -462,27 +453,6 @@ func main() {
 			debugln("dp not found:", n.Name)
 		}
 	}
-}
-
-func dataFromSource(data string) (string, bool) {
-	_, f, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", false
-	}
-	path := filepath.Join(filepath.Dir(f)+"../../..", "data", data)
-	fi, err := os.Stat(path)
-	if err != nil {
-		return "", false
-	}
-	return path, fi.Mode().IsRegular()
-}
-
-func dataFilesFromSource() ([]os.FileInfo, error) {
-	_, f, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, nil
-	}
-	return ioutil.ReadDir(filepath.Join(filepath.Dir(f)+"../../..", "data"))
 }
 
 func check(_ interface{}, err error) {
