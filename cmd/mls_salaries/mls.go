@@ -92,6 +92,8 @@ var allClubs = Clubs{
 	"Nashville SC":           "NSC",
 	"Inter Miami":            "MIA",
 	"Austin FC":              "AFC",
+	"Charlotte FC":           "CLT",
+	"Major League Soccer":    "MLS",
 }
 
 // Set sets the value of clubs
@@ -309,7 +311,7 @@ func main() {
 		pos        Pos
 		club       = flag.Bool("sort", true, "sort by club")
 		dp         = flag.Bool("dp", false, "only show DP players")
-		data       = flag.String("data", "2021_05_13_data", "data file")
+		data       = flag.String("data", "2022_05_17_data", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		clubTotals = make(ClubTotals, len(allClubs))
 	)
