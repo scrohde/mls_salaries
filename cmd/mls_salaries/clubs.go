@@ -25,6 +25,7 @@ var allClubs = Clubs{
 	"LA Galaxy":              "LA",
 	"LAFC":                   "LAFC",
 	"CF Montreal":            "MTL",
+	"Montreal":               "MTL",
 	"New York Red Bulls":     "NYRB",
 	"Toronto FC":             "TOR",
 	"Atlanta United":         "ATL",
@@ -42,6 +43,7 @@ var allClubs = Clubs{
 	"Charlotte FC":           "CLT",
 	"Major League Soccer":    "MLS",
 	"St. Louis SC":           "STL",
+	"St. Louis City SC":      "STL",
 }
 
 // Set sets the value of clubs
