@@ -43,7 +43,7 @@ func main() {
 		players    Players
 		pos        Pos
 		sortByClub = flag.Bool("sort", true, "sort by club")
-		data       = flag.String("data", "2023_05_16_data", "data file")
+		data       = flag.String("data", "2023_09_15_data", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		dps        = flag.Bool("dp", false, "players making above the maximum Targeted Allocation Money amount")
 		clubTotals = make(ClubTotals, len(allClubs))
