@@ -47,7 +47,10 @@ func (p *Players) HasVal(val string) bool {
 // Pos is the set of player positions
 type Pos []string
 
-var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M-D", "M", "M/F"}
+var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M-D", "M", "M/F",
+	"Right Wing", "CENTER-BACK", "DEFENSIVE MIDFIELD", "RIGHT WING", "CENTRAL MIDFIELD", "CENTER FORWARD", "RIGHT-BACK",
+	"ATTACKING MIDFIELD", "GOALKEEPER", "LEFT-BACK", "LEFT WING", "RIGHT MIDFIELD", "RIGHT WING", "LEFT MIDFIELD",
+	"MIDFIELDER", "FORWARD", "DEFENDER"}
 
 // HasVal returns true if s is in p
 func (p *Pos) HasVal(s string) bool {
