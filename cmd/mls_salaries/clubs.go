@@ -10,6 +10,7 @@ import (
 type Clubs map[string]string
 
 var allClubs = Clubs{
+	"MLS Pool":               "MLS",
 	"New England Revolution": "NE",
 	"Orlando City SC":        "ORL",
 	"San Jose Earthquakes":   "SJ",
@@ -44,6 +45,7 @@ var allClubs = Clubs{
 	"Major League Soccer":    "MLS",
 	"St. Louis SC":           "STL",
 	"St. Louis City SC":      "STL",
+	"San Diego FC":           "SDFC",
 }
 
 // Set sets the value of clubs
