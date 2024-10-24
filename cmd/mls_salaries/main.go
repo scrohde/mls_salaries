@@ -43,7 +43,7 @@ func main() {
 		players    Players
 		pos        Pos
 		sortByClub = flag.Bool("sort", true, "sort by club")
-		data       = flag.String("data", "2024_04_25_data", "data file")
+		data       = flag.String("data", "2024_09_13_data", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		dps        = flag.Bool("dp", false, "players making above the maximum Targeted Allocation Money amount")
 		clubTotals = make(ClubTotals, len(allClubs))
@@ -54,7 +54,7 @@ func main() {
 	flag.Var(&pos, "pos", "comma separated list of player positions")
 	flag.Parse()
 
-	debugln := func(a ...interface{}) {
+	debugln := func(a ...any) {
 		if *debug {
 			fmt.Println(a...)
 		}
@@ -94,14 +94,15 @@ func main() {
 				player.Pos = token
 
 			case token[0] == '$', token[0] >= '0' && token[0] <= '9':
-				token = strings.TrimLeft(token, "$")
-				if token == "" {
+				if token = strings.TrimLeft(token, "$"); token == "" {
 					continue
 				}
+
 				val, err := strconv.ParseFloat(strings.Replace(token, ",", "", -1), 32)
 				if err != nil {
 					continue
 				}
+
 				if player.BaseSalary == 0 {
 					player.BaseSalary = val
 				} else {
