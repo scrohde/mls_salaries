@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,7 +42,7 @@ func main() {
 		all        Players
 		clubs      Clubs
 		players    Players
-		pos        Pos
+		pos        Positions
 		sortByClub = flag.Bool("sort", true, "sort by club")
 		data       = flag.String("data", "2024_09_13_data", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
@@ -82,6 +83,7 @@ func main() {
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), sep)
 		player := Player{}
+		position := Position("")
 		for _, token := range tokens {
 			if token == "" {
 				continue
@@ -90,8 +92,8 @@ func main() {
 			case allClubs.HasVal(token):
 				player.Club = allClubs.Abv(token)
 
-			case allPos.HasVal(token):
-				player.Pos = token
+			case position.Set(token) == nil:
+				player.Pos = position.String()
 
 			case token[0] == '$', token[0] >= '0' && token[0] <= '9':
 				if token = strings.TrimLeft(token, "$"); token == "" {
@@ -124,7 +126,7 @@ func main() {
 		if clubs != nil && !clubs.HasVal(player.Club) {
 			continue
 		}
-		if pos != nil && !pos.HasVal(player.Pos) {
+		if pos != nil && !slices.Contains(pos, player.Pos) {
 			continue
 		}
 		if players != nil && !players.HasVal(player.Name) {

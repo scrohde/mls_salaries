@@ -10,7 +10,10 @@ import (
 type Clubs map[string]string
 
 var allClubs = Clubs{
+	"Pool":                   "MLS",
 	"MLS Pool":               "MLS",
+	"Major League Soccer":    "MLS",
+	"Retired":                "MLS",
 	"New England Revolution": "NE",
 	"Orlando City SC":        "ORL",
 	"San Jose Earthquakes":   "SJ",
@@ -27,6 +30,7 @@ var allClubs = Clubs{
 	"LAFC":                   "LAFC",
 	"CF Montreal":            "MTL",
 	"Montreal":               "MTL",
+	"Montreal Impact":        "MTL",
 	"New York Red Bulls":     "NYRB",
 	"Toronto FC":             "TOR",
 	"Atlanta United":         "ATL",
@@ -42,7 +46,6 @@ var allClubs = Clubs{
 	"Inter Miami":            "MIA",
 	"Austin FC":              "AFC",
 	"Charlotte FC":           "CLT",
-	"Major League Soccer":    "MLS",
 	"St. Louis SC":           "STL",
 	"St. Louis City SC":      "STL",
 	"San Diego FC":           "SDFC",
