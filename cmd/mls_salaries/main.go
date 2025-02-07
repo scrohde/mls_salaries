@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,6 +95,7 @@ func main() {
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), sep)
 		player := Player{}
+		position := Position("")
 		for _, token := range tokens {
 			if token == "" {
 				continue
@@ -116,6 +118,7 @@ func main() {
 				if err != nil {
 					continue
 				}
+
 				if player.BaseSalary == 0 {
 					player.BaseSalary = val
 				} else {

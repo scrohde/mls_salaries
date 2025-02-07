@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 )
 
@@ -44,35 +44,63 @@ func (p *Players) HasVal(val string) bool {
 	return false
 }
 
-// Pos is the set of player positions
-type Pos []string
+type Position string
 
-var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M-D", "M", "M/F",
-	"Right Wing", "CENTER-BACK", "DEFENSIVE MIDFIELD", "RIGHT WING", "CENTRAL MIDFIELD", "CENTER FORWARD", "RIGHT-BACK",
-	"ATTACKING MIDFIELD", "GOALKEEPER", "LEFT-BACK", "LEFT WING", "RIGHT MIDFIELD", "RIGHT WING", "LEFT MIDFIELD",
-	"MIDFIELDER", "FORWARD", "DEFENDER"}
-
-// HasVal returns true if s is in p
-func (p *Pos) HasVal(s string) bool {
-	s = strings.ToUpper(s)
-	for _, pos := range *p {
-		if pos == s {
-			return true
-		}
-	}
-	return false
+func (p *Position) String() string {
+	return string(*p)
 }
 
-// Set sets the value of p from a comma separated list of positions
-func (p *Pos) Set(s string) error {
-	for _, pos := range strings.Split(s, ",") {
-		pos = strings.ToUpper(strings.TrimSpace(pos))
-		if !allPos.HasVal(pos) {
-			return fmt.Errorf("valid values: %s", allPos.String())
-		}
-		*p = append(*p, pos)
+func (p *Position) Set(posStr string) error {
+	switch strings.ToUpper(strings.TrimSpace(posStr)) {
+	case "CENTER FORWARD", "F", "FORWARD":
+		*p = "Center Forward"
+	case "LEFT WING", "LW":
+		*p = "Left Wing"
+	case "RIGHT WING", "RW":
+		*p = "Right Wing"
+	case "ATTACKING MIDFIELD", "F-M", "F/M", "M-F", "M/F", "AM":
+		*p = "Attacking Midfield"
+	case "CENTRAL MIDFIELD", "M", "MF", "MIDFIELDER", "CM":
+		*p = "Central Midfield"
+	case "DEFENSIVE MIDFIELD", "D-M", "M-D", "D/M", "M/D", "DM":
+		*p = "Defensive Midfield"
+	case "LEFT MIDFIELD", "LM":
+		*p = "Left Midfield"
+	case "RIGHT MIDFIELD", "RM":
+		*p = "Right Midfield"
+	case "LEFT-BACK", "LB":
+		*p = "Left-back"
+	case "CENTER-BACK", "D", "DEFENDER", "CB":
+		*p = "Center-back"
+	case "RIGHT-BACK", "RB":
+		*p = "Right-back"
+	case "GOALKEEPER", "GK":
+		*p = "Goalkeeper"
+	case "SUBSTITUTE":
+		*p = "Substitute"
+	default:
+		return errors.New("invalid position")
 	}
 	return nil
 }
 
-func (p *Pos) String() string { return strings.Join(*p, ", ") }
+// Positions is the set of player positions
+type Positions []string
+
+// Set sets the value of p from a comma separated list of positions
+func (p *Positions) Set(s string) error {
+	v := new(Position)
+
+	for _, pos := range strings.Split(s, ",") {
+		err := v.Set(pos)
+		if err != nil {
+			return err
+		}
+
+		*p = append(*p, v.String())
+	}
+
+	return nil
+}
+
+func (p *Positions) String() string { return strings.Join(*p, ", ") }
