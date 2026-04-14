@@ -27,7 +27,7 @@ func (p *Players) Set(s string) error {
 }
 
 func (p *Players) String() string {
-	names := make([]string, len(*p), len(*p))
+	names := make([]string, 0, len(*p))
 	for _, player := range *p {
 		names = append(names, player.Name)
 	}
@@ -84,23 +84,35 @@ func (p *Position) Set(posStr string) error {
 	return nil
 }
 
-// Positions is the set of player positions
-type Positions []string
+// Pos is the set of player positions used for filtering and validation
+type Pos []string
 
 // Set sets the value of p from a comma separated list of positions
-func (p *Positions) Set(s string) error {
+func (p *Pos) Set(s string) error {
 	v := new(Position)
-
 	for _, pos := range strings.Split(s, ",") {
-		err := v.Set(pos)
-		if err != nil {
+		if err := v.Set(pos); err != nil {
 			return err
 		}
-
-		*p = append(*p, v.String())
+		*p = append(*p, strings.ToUpper(v.String()))
 	}
-
 	return nil
 }
 
-func (p *Positions) String() string { return strings.Join(*p, ", ") }
+// HasVal returns true if val matches any position in p (case-insensitive)
+func (p Pos) HasVal(val string) bool {
+	val = strings.ToUpper(strings.TrimSpace(val))
+	for _, pos := range p {
+		if strings.ToUpper(pos) == val {
+			return true
+		}
+	}
+	return false
+}
+
+func (p Pos) String() string { return strings.Join(p, ", ") }
+
+// allPos enumerates valid position tokens
+var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M-D", "M", "M/F",
+	"RIGHT WING", "CENTER-BACK", "DEFENSIVE MIDFIELD", "RIGHT WING", "CENTRAL MIDFIELD", "CENTER FORWARD", "RIGHT-BACK",
+	"ATTACKING MIDFIELD", "GOALKEEPER", "LEFT-BACK", "LEFT WING", "RIGHT MIDFIELD", "LEFT MIDFIELD", "MIDFIELDER", "FORWARD", "DEFENDER"}

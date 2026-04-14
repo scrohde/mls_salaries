@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -95,7 +94,6 @@ func main() {
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), sep)
 		player := Player{}
-		position := Position("")
 		for _, token := range tokens {
 			if token == "" {
 				continue
@@ -104,9 +102,9 @@ func main() {
 			// Check if the token matches a club.
 			case allClubs.HasVal(token):
 				player.Club = allClubs.Abv(token)
-			// Check if the token matches a position.
+				// Check if the token matches a position.
 			case allPos.HasVal(token):
-				player.Pos = token
+				player.Pos = strings.ToUpper(token)
 			// If the token starts with '$' or a digit, treat it as a salary value.
 			case token[0] == '$' || (token[0] >= '0' && token[0] <= '9'):
 				token = strings.TrimLeft(token, "$")
