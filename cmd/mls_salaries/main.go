@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -38,6 +37,127 @@ func usage() {
 	}
 }
 
+func tokenizeLine(line, sep string) []string {
+	if sep == "\t" {
+		raw := strings.Split(line, sep)
+		tokens := make([]string, 0, len(raw))
+		for _, token := range raw {
+			token = strings.TrimSpace(token)
+			if token != "" {
+				tokens = append(tokens, token)
+			}
+		}
+		return tokens
+	}
+	return strings.Fields(line)
+}
+
+func matchWords(tokens []string, start int, words []string) bool {
+	if start+len(words) > len(tokens) {
+		return false
+	}
+	for i, word := range words {
+		if !strings.EqualFold(tokens[start+i], word) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchClubAt(tokens []string, start int) (string, int) {
+	bestAbv := ""
+	bestLen := 0
+	for full, abv := range allClubs {
+		switch {
+		case strings.EqualFold(tokens[start], full), strings.EqualFold(tokens[start], abv):
+			if bestLen < 1 {
+				bestAbv = abv
+				bestLen = 1
+			}
+		default:
+			words := strings.Fields(full)
+			if len(words) > bestLen && matchWords(tokens, start, words) {
+				bestAbv = abv
+				bestLen = len(words)
+			}
+		}
+	}
+	return bestAbv, bestLen
+}
+
+func matchPositionAt(tokens []string, start int) (string, int) {
+	maxWords := 3
+	if remaining := len(tokens) - start; remaining < maxWords {
+		maxWords = remaining
+	}
+	for n := maxWords; n > 0; n-- {
+		position := Position("")
+		if position.Set(strings.Join(tokens[start:start+n], " ")) == nil {
+			return position.String(), n
+		}
+	}
+	return "", 0
+}
+
+func parseSalary(token string) (float64, bool) {
+	if token == "" || (token[0] != '$' && (token[0] < '0' || token[0] > '9')) {
+		return 0, false
+	}
+	token = strings.TrimLeft(token, "$")
+	if token == "" {
+		return 0, false
+	}
+	val, err := strconv.ParseFloat(strings.Replace(token, ",", "", -1), 64)
+	return val, err == nil
+}
+
+func parsePlayerLine(line, sep string) Player {
+	tokens := tokenizeLine(line, sep)
+	player := Player{}
+	for i := 0; i < len(tokens); {
+		token := tokens[i]
+		if token == "$" {
+			i++
+			continue
+		}
+		if club, n := matchClubAt(tokens, i); n > 0 {
+			player.Club = club
+			i += n
+			continue
+		}
+		if pos, n := matchPositionAt(tokens, i); n > 0 {
+			player.Pos = pos
+			i += n
+			continue
+		}
+		if val, ok := parseSalary(token); ok {
+			if player.BaseSalary == 0 {
+				player.BaseSalary = val
+			} else {
+				player.Compensation = val
+			}
+			i++
+			continue
+		}
+		if player.Name == "" {
+			player.Name = token
+		} else {
+			player.Name += " " + token
+		}
+		i++
+	}
+	return player
+}
+
+func hasPosition(positions Positions, pos string) bool {
+	for _, position := range positions {
+		if strings.EqualFold(position, pos) {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	flag.Usage = usage
 	var (
@@ -47,7 +167,7 @@ func main() {
 		// clubs, filterPlayers, and pos are command-line filters.
 		clubs         Clubs
 		filterPlayers Players
-		pos           Pos
+		pos           Positions
 
 		sortByClub = flag.Bool("sort", true, "sort by club")
 		dataFile   = flag.String("data", "2024_04_25_data", "data file")
@@ -93,46 +213,7 @@ func main() {
 
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		tokens := strings.Split(scanner.Text(), sep)
-		player := Player{}
-		position := Position("")
-		for _, token := range tokens {
-			if token == "" {
-				continue
-			}
-			switch {
-			// Check if the token matches a club.
-			case allClubs.HasVal(token):
-				player.Club = allClubs.Abv(token)
-			// Check if the token matches a position.
-			case allPos.HasVal(token):
-				player.Pos = token
-			// If the token starts with '$' or a digit, treat it as a salary value.
-			case token[0] == '$' || (token[0] >= '0' && token[0] <= '9'):
-				token = strings.TrimLeft(token, "$")
-				if token == "" {
-					continue
-				}
-				// Parse salary as float64.
-				val, err := strconv.ParseFloat(strings.Replace(token, ",", "", -1), 64)
-				if err != nil {
-					continue
-				}
-
-				if player.BaseSalary == 0 {
-					player.BaseSalary = val
-				} else {
-					player.Compensation = val
-				}
-			// Otherwise, assume the token is part of the player's name.
-			default:
-				if player.Name == "" {
-					player.Name = token
-				} else {
-					player.Name += " " + token
-				}
-			}
-		}
+		player := parsePlayerLine(scanner.Text(), sep)
 		// Skip lines with insufficient data.
 		if player.Club == "" && player.Pos == "" && player.Compensation < 30000.00 {
 			debugln("no match:", player)
@@ -142,7 +223,7 @@ func main() {
 		if len(clubs) > 0 && !clubs.HasVal(player.Club) {
 			continue
 		}
-		if len(pos) > 0 && !pos.HasVal(player.Pos) {
+		if len(pos) > 0 && !hasPosition(pos, player.Pos) {
 			continue
 		}
 		if len(filterPlayers) > 0 && !filterPlayers.HasVal(player.Name) {

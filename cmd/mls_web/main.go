@@ -132,13 +132,8 @@ var allPos = Pos{"F", "M-F", "F-M", "F/M", "GK", "D", "D-M", "M-D", "M", "M/F",
 	"MIDFIELDER", "FORWARD", "DEFENDER"}
 
 func (p Pos) HasVal(s string) bool {
-	s = strings.ToUpper(s)
-	for _, pos := range p {
-		if pos == s {
-			return true
-		}
-	}
-	return false
+	_, ok := normalizePosition(s)
+	return ok
 }
 
 // ClubTotals maps club names to total compensation.
@@ -157,6 +152,159 @@ func (ct ClubTotals) Sort() []KeyValue {
 	}
 	sort.Slice(p, func(i, j int) bool { return p[i].Value > p[j].Value })
 	return p
+}
+
+func normalizePosition(posStr string) (string, bool) {
+	switch strings.ToUpper(strings.TrimSpace(posStr)) {
+	case "CENTER FORWARD", "F", "FORWARD":
+		return "Center Forward", true
+	case "LEFT WING", "LW":
+		return "Left Wing", true
+	case "RIGHT WING", "RW":
+		return "Right Wing", true
+	case "ATTACKING MIDFIELD", "F-M", "F/M", "M-F", "M/F", "AM":
+		return "Attacking Midfield", true
+	case "CENTRAL MIDFIELD", "M", "MF", "MIDFIELDER", "CM":
+		return "Central Midfield", true
+	case "DEFENSIVE MIDFIELD", "D-M", "M-D", "D/M", "M/D", "DM":
+		return "Defensive Midfield", true
+	case "LEFT MIDFIELD", "LM":
+		return "Left Midfield", true
+	case "RIGHT MIDFIELD", "RM":
+		return "Right Midfield", true
+	case "LEFT-BACK", "LB":
+		return "Left-back", true
+	case "CENTER-BACK", "D", "DEFENDER", "CB":
+		return "Center-back", true
+	case "RIGHT-BACK", "RB":
+		return "Right-back", true
+	case "GOALKEEPER", "GK":
+		return "Goalkeeper", true
+	case "SUBSTITUTE":
+		return "Substitute", true
+	default:
+		return "", false
+	}
+}
+
+func tokenizeLine(line, sep string) []string {
+	if sep == "\t" {
+		raw := strings.Split(line, sep)
+		tokens := make([]string, 0, len(raw))
+		for _, token := range raw {
+			token = strings.TrimSpace(token)
+			if token != "" {
+				tokens = append(tokens, token)
+			}
+		}
+		return tokens
+	}
+	return strings.Fields(line)
+}
+
+func matchWords(tokens []string, start int, words []string) bool {
+	if start+len(words) > len(tokens) {
+		return false
+	}
+	for i, word := range words {
+		if !strings.EqualFold(tokens[start+i], word) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchClubAt(tokens []string, start int) (string, int) {
+	bestAbv := ""
+	bestLen := 0
+	for full, abv := range allClubs {
+		switch {
+		case strings.EqualFold(tokens[start], full), strings.EqualFold(tokens[start], abv):
+			if bestLen < 1 {
+				bestAbv = abv
+				bestLen = 1
+			}
+		default:
+			words := strings.Fields(full)
+			if len(words) > bestLen && matchWords(tokens, start, words) {
+				bestAbv = abv
+				bestLen = len(words)
+			}
+		}
+	}
+	return bestAbv, bestLen
+}
+
+func matchPositionAt(tokens []string, start int) (string, int) {
+	maxWords := 3
+	if remaining := len(tokens) - start; remaining < maxWords {
+		maxWords = remaining
+	}
+	for n := maxWords; n > 0; n-- {
+		if pos, ok := normalizePosition(strings.Join(tokens[start:start+n], " ")); ok {
+			return pos, n
+		}
+	}
+	return "", 0
+}
+
+func parseSalary(token string) (float64, bool) {
+	if token == "" || (token[0] != '$' && (token[0] < '0' || token[0] > '9')) {
+		return 0, false
+	}
+	token = strings.TrimLeft(token, "$")
+	if token == "" {
+		return 0, false
+	}
+	val, err := strconv.ParseFloat(strings.ReplaceAll(token, ",", ""), 64)
+	return val, err == nil
+}
+
+func parsePlayerLine(line, sep string) Player {
+	tokens := tokenizeLine(line, sep)
+	player := Player{}
+	for i := 0; i < len(tokens); {
+		token := tokens[i]
+		if token == "$" {
+			i++
+			continue
+		}
+		if club, n := matchClubAt(tokens, i); n > 0 {
+			player.Club = club
+			i += n
+			continue
+		}
+		if pos, n := matchPositionAt(tokens, i); n > 0 {
+			player.Pos = pos
+			i += n
+			continue
+		}
+		if val, ok := parseSalary(token); ok {
+			if player.BaseSalary == 0 {
+				player.BaseSalary = val
+			} else {
+				player.Compensation = val
+			}
+			i++
+			continue
+		}
+		if player.Name == "" {
+			player.Name = token
+		} else {
+			player.Name += " " + token
+		}
+		i++
+	}
+	return player
+}
+
+func hasPosition(positions Pos, pos string) bool {
+	for _, position := range positions {
+		if strings.EqualFold(position, pos) {
+			return true
+		}
+	}
+	return false
 }
 
 func commaf(v float64) string {
@@ -231,8 +379,7 @@ func processData(dataFile, clubsStr, playersStr, posStr string, sortByClub, dp b
 	var posFilter Pos
 	if posStr != "" {
 		for _, pos := range strings.Split(posStr, ",") {
-			p := strings.ToUpper(strings.TrimSpace(pos))
-			if allPos.HasVal(p) {
+			if p, ok := normalizePosition(pos); ok {
 				posFilter = append(posFilter, p)
 			}
 		}
@@ -268,52 +415,14 @@ func processData(dataFile, clubsStr, playersStr, posStr string, sortByClub, dp b
 
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		tokens := strings.Split(scanner.Text(), sep)
-		player := Player{}
-		for _, token := range tokens {
-			token = strings.TrimSpace(token)
-			if token == "" {
-				continue
-			}
-			switch {
-			case allClubs.HasVal(token):
-				for full, abv := range allClubs {
-					if strings.EqualFold(token, full) || strings.EqualFold(token, abv) {
-						player.Club = abv
-						break
-					}
-				}
-			case allPos.HasVal(token):
-				player.Pos = strings.ToUpper(token)
-			case token[0] == '$' || (token[0] >= '0' && token[0] <= '9'):
-				token = strings.TrimLeft(token, "$")
-				if token == "" {
-					continue
-				}
-				val, err := strconv.ParseFloat(strings.ReplaceAll(token, ",", ""), 64)
-				if err != nil {
-					continue
-				}
-				if player.BaseSalary == 0 {
-					player.BaseSalary = val
-				} else {
-					player.Compensation = val
-				}
-			default:
-				if player.Name == "" {
-					player.Name = token
-				} else {
-					player.Name += " " + token
-				}
-			}
-		}
+		player := parsePlayerLine(scanner.Text(), sep)
 		if player.Club == "" && player.Pos == "" && player.Compensation < 30000.00 {
 			continue
 		}
 		if len(clubsFilter) > 0 && !clubsFilter.HasVal(player.Club) {
 			continue
 		}
-		if len(posFilter) > 0 && !posFilter.HasVal(player.Pos) {
+		if len(posFilter) > 0 && !hasPosition(posFilter, player.Pos) {
 			continue
 		}
 		if len(playersFilter) > 0 {
@@ -412,7 +521,7 @@ var indexHTML = `
 		<form hx-post="/filter" hx-target="#results" hx-swap="innerHTML" hx-trigger="change delay:500ms">
 			<!-- Data File Selection: Display formatted names -->
 			<label>Data File:
-				<select name="data" id="data-select" hx-get="/players" hx-target="#players-list" hx-trigger="change">
+				<select name="data" id="data-select" hx-get="/updateFilters" hx-trigger="change">
 					{{range $i, $f := .DataFiles}}
 						<option value="{{$f.Value}}" {{if eq $i 0}}selected{{end}}>{{$f.Display}}</option>
 					{{end}}
@@ -543,6 +652,8 @@ var indexHTML = `
 	      });
 	      clubsHidden.value = names.join(",");
 	      formElem.dispatchEvent(new Event('change'));
+	      // Update players list based on selected clubs
+	      htmx.ajax('GET', '/players?data=' + document.getElementById("data-select").value + '&clubs=' + encodeURIComponent(clubsHidden.value), {target: document.getElementById('players-list')});
 	  }
 	  clubInput.addEventListener("change", function(e) {
 	      var value = clubInput.value.trim();
@@ -691,8 +802,7 @@ var tmplResults = template.Must(template.New("results").Funcs(template.FuncMap{
 }).Parse(resultsHTML))
 
 // indexHandler prepares the main page.
-// It sorts the data files (newest first), builds DataFileEntry values with formatted display names,
-// and computes valid lists for Players, Clubs, and Positions.
+// It now builds the clubs, positions, and players lists based solely on the data in the selected file.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	files, err := fs.Glob(dataFS, "data/*_data")
 	if err != nil {
@@ -711,14 +821,30 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(dataFilesEntries, func(i, j int) bool {
 		return dataFilesEntries[i].Value > dataFilesEntries[j].Value
 	})
-	// Compute players list from the default (newest) data file
-	playersList := []string{}
+	// Compute players, clubs, and positions lists from the default (newest) data file
+	var playersList []string
+	clubsSet := make(map[string]struct{})
+	positionsSet := make(map[string]struct{})
+
 	if len(dataFilesEntries) > 0 {
 		playersData, _, err := processData(dataFilesEntries[0].Value, "", "", "", false, false)
 		if err == nil {
 			nameSet := make(map[string]struct{})
 			for _, p := range playersData {
 				nameSet[p.Name] = struct{}{}
+				if p.Club != "" {
+					full, ok := allClubs.getKey(p.Club)
+					var clubFormatted string
+					if ok {
+						clubFormatted = fmt.Sprintf("%s (%s)", full, p.Club)
+					} else {
+						clubFormatted = p.Club
+					}
+					clubsSet[clubFormatted] = struct{}{}
+				}
+				if p.Pos != "" {
+					positionsSet[p.Pos] = struct{}{}
+				}
 			}
 			for name := range nameSet {
 				playersList = append(playersList, name)
@@ -726,15 +852,17 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 			sort.Strings(playersList)
 		}
 	}
-	// Build clubs list: each club now appears as "Full Name (Abv)"
+
 	var clubsList []string
-	for full, abv := range allClubs {
-		clubsList = append(clubsList, fmt.Sprintf("%s (%s)", full, abv))
+	for club := range clubsSet {
+		clubsList = append(clubsList, club)
 	}
 	sort.Strings(clubsList)
-	// Positions list: sort the provided list (use full names as provided)
-	var positionsList []string = make([]string, len(allPos))
-	copy(positionsList, allPos)
+
+	var positionsList []string
+	for pos := range positionsSet {
+		positionsList = append(positionsList, pos)
+	}
 	sort.Strings(positionsList)
 
 	data := struct {
@@ -753,15 +881,16 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// playersHandler returns a list of <option> elements for the players datalist,
-// reading player names from the specified data file.
+// playersHandler returns a list of <option> elements for the players datalist.
+// It now also accepts a "clubs" parameter to filter players by club.
 func playersHandler(w http.ResponseWriter, r *http.Request) {
 	dataFile := r.URL.Query().Get("data")
 	if dataFile == "" {
 		http.Error(w, "Missing data parameter", http.StatusBadRequest)
 		return
 	}
-	playersData, _, err := processData(dataFile, "", "", "", false, false)
+	clubsStr := r.URL.Query().Get("clubs")
+	playersData, _, err := processData(dataFile, clubsStr, "", "", false, false)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error processing data: %v", err), http.StatusInternalServerError)
 		return
@@ -783,6 +912,79 @@ func playersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf.Bytes())
 }
 
+// updateFiltersHandler returns updated clubs, positions, and players datalists based on the selected file.
+// The response uses HTMX out-of-band swaps.
+func updateFiltersHandler(w http.ResponseWriter, r *http.Request) {
+	dataFile := r.URL.Query().Get("data")
+	if dataFile == "" {
+		http.Error(w, "Missing data parameter", http.StatusBadRequest)
+		return
+	}
+	playersData, _, err := processData(dataFile, "", "", "", false, false)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error processing data: %v", err), http.StatusInternalServerError)
+		return
+	}
+	clubsSet := make(map[string]struct{})
+	positionsSet := make(map[string]struct{})
+	playersSet := make(map[string]struct{})
+	for _, p := range playersData {
+		if p.Club != "" {
+			full, ok := allClubs.getKey(p.Club)
+			var clubFormatted string
+			if ok {
+				clubFormatted = fmt.Sprintf("%s (%s)", full, p.Club)
+			} else {
+				clubFormatted = p.Club
+			}
+			clubsSet[clubFormatted] = struct{}{}
+		}
+		if p.Pos != "" {
+			positionsSet[p.Pos] = struct{}{}
+		}
+		if p.Name != "" {
+			playersSet[p.Name] = struct{}{}
+		}
+	}
+	var clubsList []string
+	for club := range clubsSet {
+		clubsList = append(clubsList, club)
+	}
+	sort.Strings(clubsList)
+
+	var positionsList []string
+	for pos := range positionsSet {
+		positionsList = append(positionsList, pos)
+	}
+	sort.Strings(positionsList)
+
+	var playersList []string
+	for name := range playersSet {
+		playersList = append(playersList, name)
+	}
+	sort.Strings(playersList)
+
+	// Write out OOB swap fragments for clubs, positions, and players datalists.
+	fmt.Fprintf(w, `<datalist id="clubs-list" hx-swap-oob="true">`)
+	for _, club := range clubsList {
+		fmt.Fprintf(w, `<option value="%s">`, template.HTMLEscapeString(club))
+	}
+	fmt.Fprintf(w, `</datalist>`)
+
+	fmt.Fprintf(w, `<datalist id="positions-list" hx-swap-oob="true">`)
+	for _, pos := range positionsList {
+		fmt.Fprintf(w, `<option value="%s">`, template.HTMLEscapeString(pos))
+	}
+	fmt.Fprintf(w, `</datalist>`)
+
+	fmt.Fprintf(w, `<datalist id="players-list" hx-swap-oob="true">`)
+	for _, name := range playersList {
+		fmt.Fprintf(w, `<option value="%s">`, template.HTMLEscapeString(name))
+	}
+	fmt.Fprintf(w, `</datalist>`)
+}
+
+// filterHandler processes the form submission and renders filtered results.
 func filterHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form", http.StatusBadRequest)
@@ -823,6 +1025,7 @@ func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/filter", filterHandler)
 	http.HandleFunc("/players", playersHandler)
+	http.HandleFunc("/updateFilters", updateFiltersHandler)
 	fmt.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
