@@ -27,7 +27,7 @@ func (p *Players) Set(s string) error {
 }
 
 func (p *Players) String() string {
-	names := make([]string, len(*p), len(*p))
+	names := make([]string, 0, len(*p))
 	for _, player := range *p {
 		names = append(names, player.Name)
 	}
