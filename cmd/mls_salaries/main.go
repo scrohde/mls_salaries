@@ -10,10 +10,13 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/ledongthuc/pdf"
 )
 
 //go:embed data/*
@@ -23,8 +26,9 @@ var dataFS embed.FS
 func usage() {
 	fmt.Printf("Usage of %s:\n", os.Args[0])
 	flag.PrintDefaults()
-	files, err := fs.Glob(dataFS, "data/*_data")
+	files, err := fs.Glob(dataFS, "data/*")
 	checkErr(err)
+	files = salaryDataFiles(files)
 	if len(files) > 0 {
 		// If there's an odd number of files, append a dummy value to maintain pairs.
 		if len(files)%2 != 0 {
@@ -35,6 +39,18 @@ func usage() {
 			fmt.Printf("  %s, %s\n", files[i][len("data/"):], files[i+1][len("data/"):])
 		}
 	}
+}
+
+func salaryDataFiles(files []string) []string {
+	filtered := files[:0]
+	for _, file := range files {
+		lower := strings.ToLower(file)
+		if strings.HasSuffix(lower, "_data") || strings.HasSuffix(lower, ".pdf") {
+			filtered = append(filtered, file)
+		}
+	}
+	sort.Strings(filtered)
+	return filtered
 }
 
 func tokenizeLine(line, sep string) []string {
@@ -68,18 +84,14 @@ func matchClubAt(tokens []string, start int) (string, int) {
 	bestAbv := ""
 	bestLen := 0
 	for full, abv := range allClubs {
-		switch {
-		case strings.EqualFold(tokens[start], full), strings.EqualFold(tokens[start], abv):
-			if bestLen < 1 {
-				bestAbv = abv
-				bestLen = 1
-			}
-		default:
-			words := strings.Fields(full)
-			if len(words) > bestLen && matchWords(tokens, start, words) {
-				bestAbv = abv
-				bestLen = len(words)
-			}
+		words := strings.Fields(full)
+		if len(words) > bestLen && matchWords(tokens, start, words) {
+			bestAbv = abv
+			bestLen = len(words)
+		}
+		if bestLen < 1 && (strings.EqualFold(tokens[start], full) || strings.EqualFold(tokens[start], abv)) {
+			bestAbv = abv
+			bestLen = 1
 		}
 	}
 	return bestAbv, bestLen
@@ -109,6 +121,111 @@ func parseSalary(token string) (float64, bool) {
 	}
 	val, err := strconv.ParseFloat(strings.Replace(token, ",", "", -1), 64)
 	return val, err == nil
+}
+
+func openDataReader(dataFile string) (*bufio.Reader, error) {
+	data, err := os.ReadFile(dataFile)
+	if err != nil {
+		data, err = dataFS.ReadFile("data/" + dataFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if strings.EqualFold(filepath.Ext(dataFile), ".pdf") {
+		text, err := extractPDFSalaryData(data)
+		if err != nil {
+			return nil, err
+		}
+		return bufio.NewReader(strings.NewReader(text)), nil
+	}
+	return bufio.NewReader(bytes.NewReader(data)), nil
+}
+
+func extractPDFSalaryData(data []byte) (string, error) {
+	reader, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", err
+	}
+	text, err := reader.GetPlainText()
+	if err != nil {
+		return "", err
+	}
+	extracted, err := io.ReadAll(text)
+	if err != nil {
+		return "", err
+	}
+
+	rows, err := pdfSalaryRows(pdfSalaryFields(string(extracted)))
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", fmt.Errorf("no salary records found in PDF")
+	}
+	return strings.Join(rows, "\n") + "\n", nil
+}
+
+func pdfSalaryFields(text string) []string {
+	var fields []string
+	for _, line := range strings.Split(text, "\n") {
+		field := strings.TrimSpace(line)
+		if field == "" || isPDFHeaderField(field) || isBrokenNewEnglandField(field) {
+			continue
+		}
+		fields = append(fields, field)
+	}
+	return fields
+}
+
+func pdfSalaryRows(fields []string) ([]string, error) {
+	var rows []string
+	for i := 0; i < len(fields); {
+		if i+4 >= len(fields) {
+			return nil, fmt.Errorf("incomplete PDF salary record near %q", strings.Join(fields[i:], " "))
+		}
+
+		firstName, lastName := fields[i], fields[i+1]
+		switch {
+		case i+5 < len(fields) && isClubField(fields[i+2]) && isPositionField(fields[i+3]) && isSalaryPair(fields[i+4], fields[i+5]):
+			rows = append(rows, strings.Join(fields[i:i+6], " "))
+			i += 6
+		case isPositionField(fields[i+2]) && isSalaryPair(fields[i+3], fields[i+4]):
+			// The 2025 fall PDF omits the repeated New England Revolution club cell from extracted text.
+			rows = append(rows, strings.Join([]string{firstName, lastName, "New England Revolution", fields[i+2], fields[i+3], fields[i+4]}, " "))
+			i += 5
+		default:
+			return nil, fmt.Errorf("could not parse PDF salary record near %q", strings.Join(fields[i:min(i+6, len(fields))], " "))
+		}
+	}
+	return rows, nil
+}
+
+func isPDFHeaderField(field string) bool {
+	switch field {
+	case "First Name", "Last Name", "Team Name", "Position", "PA Base Salary", "Guaranteed Comp":
+		return true
+	default:
+		return false
+	}
+}
+
+func isBrokenNewEnglandField(field string) bool {
+	return field == "New England Revolutio"
+}
+
+func isClubField(field string) bool {
+	return allClubs.Abv(field) != ""
+}
+
+func isPositionField(field string) bool {
+	position := Position("")
+	return position.Set(field) == nil
+}
+
+func isSalaryPair(base, compensation string) bool {
+	_, okBase := parseSalary(base)
+	_, okCompensation := parseSalary(compensation)
+	return okBase && okCompensation
 }
 
 func parsePlayerLine(line, sep string) Player {
@@ -170,7 +287,7 @@ func main() {
 		pos           Positions
 
 		sortByClub = flag.Bool("sort", true, "sort by club")
-		dataFile   = flag.String("data", "2024_04_25_data", "data file")
+		dataFile   = flag.String("data", "2025-Fall-Salary-Release.pdf", "data file")
 		debug      = flag.Bool("debug", false, "print data lines that don't match")
 		dps        = flag.Bool("dp", false, "players making above the maximum Targeted Allocation Money amount")
 		clubTotals = make(ClubTotals, len(allClubs))
@@ -189,16 +306,9 @@ func main() {
 	}
 
 	// Open the data file, trying the local filesystem first, then the embedded FS.
-	var r *bufio.Reader
-	f, err := os.Open(*dataFile)
+	r, err := openDataReader(*dataFile)
 	if err != nil {
-		fsFile, err := dataFS.Open("data/" + *dataFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		r = bufio.NewReader(fsFile)
-	} else {
-		r = bufio.NewReader(f)
+		log.Fatal(err)
 	}
 
 	// Determine the separator: if the first byte is a tab, use tab as the separator; otherwise, use a space.

@@ -12,6 +12,7 @@ type Clubs map[string]string
 var allClubs = Clubs{
 	"Pool":                   "MLS",
 	"MLS Pool":               "MLS",
+	"Without a Club":         "MLS",
 	"Major League Soccer":    "MLS",
 	"Retired":                "MLS",
 	"New England Revolution": "NE",

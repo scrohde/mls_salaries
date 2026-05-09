@@ -35,6 +35,48 @@ func TestCLIParses2025SpaceDelimitedRows(t *testing.T) {
 	}
 }
 
+func TestCLIParses2025FallPDFRows(t *testing.T) {
+	out := runCLI(t, "-data", "2025-Fall-Salary-Release.pdf", "-players", "Aleksey Miranchuk", "-sort=false")
+
+	if !strings.Contains(out, "ATL") {
+		t.Fatalf("expected parsed Atlanta club abbreviation in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Attacking Midfield") {
+		t.Fatalf("expected parsed position in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Aleksey Miranchuk") {
+		t.Fatalf("expected player name from PDF in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "4,885,441.00") {
+		t.Fatalf("expected guaranteed compensation from PDF in output, got:\n%s", out)
+	}
+}
+
+func TestCLIParses2025FallPDFRowsWithOmittedClubCell(t *testing.T) {
+	out := runCLI(t, "-data", "2025-Fall-Salary-Release.pdf", "-players", "Carles Gil", "-sort=false")
+
+	if !strings.Contains(out, "NE") {
+		t.Fatalf("expected inferred New England club abbreviation in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Carles Gil") {
+		t.Fatalf("expected player name from PDF in output, got:\n%s", out)
+	}
+}
+
+func TestCLIParsesFullClubBeforeAbbreviation(t *testing.T) {
+	out := runCLI(t, "-data", "2025-Fall-Salary-Release.pdf", "-players", "Ascel Essengue", "-sort=false")
+
+	if !strings.Contains(out, "LA") {
+		t.Fatalf("expected LA Galaxy abbreviation in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Ascel Essengue") {
+		t.Fatalf("expected player name without club suffix in output, got:\n%s", out)
+	}
+	if strings.Contains(out, "Ascel Essengue Galaxy") {
+		t.Fatalf("club name leaked into parsed player name:\n%s", out)
+	}
+}
+
 func TestCLIPositionFilterMatchesAbbreviatedData(t *testing.T) {
 	out := runCLI(t, "-data", "2013_09_15_data", "-pos", "F", "-sort=false")
 
